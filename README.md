@@ -1,3 +1,13 @@
+# Genetic Algorithm Final Project
+This is a fork from WANG-Chaoyue's [EGAN-pytorch](https://github.com/WANG-Chaoyue/EvolutionaryGAN).
+Current Status: Trying to reproduce the work, and here are some notes.
+- Due to tensorflow version issue, use tensorflow.compat.v1 and disable_v2_behavior temporarily.
+- Cannot use the latest scipy (1.2.0 is ok)
+- Before run the script the author provided, please generate C10_inception_moments.npz first (see the issue in original repo)
+
+Unsolved issue:
+- change both load_size and crop_size to 16 would cause some shape mismatch
+
 # EvolutionaryGAN-pytorch
 The author's officially unofficial Pytorch [EvolutionaryGAN](https://arxiv.org/abs/1803.00657) implementation. The original theano code can be found [here](https://github.com/WANG-Chaoyue/EvolutionaryGAN).
 
