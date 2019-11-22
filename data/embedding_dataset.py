@@ -1,18 +1,24 @@
 import os
 import subprocess
 import random
+from joblib import Parallel, delayed
 
 import numpy as np
+from tqdm import tqdm
 
 from data.base_dataset import BaseDataset
 
 
 class EmbeddingDataset(BaseDataset):
-    """A template dataset class for you to implement custom datasets."""
-
+    """
+    pretrained word embedding are at
+    https://drive.google.com/drive/folders/1CuI62zaN1TUc-JZA_MEVAQngP7fJR89c
+    """
     download_urls = {
-        '0to0.1.cbow.vec': 'https://drive.google.com/open?id=1-C3Nq9nXBzBsPI570IXkl81UlcBE-JYn',
-        '0to0.1.skipgram.vec': 'https://drive.google.com/open?id=1-SPp0fIoGhHtbV4Z73bHrKIje-hUzD2D',
+        '0to0.1.cbow.vec': '',
+        '0to0.1.skipgram.vec': 'https://drive.google.com/open?id=1xNJC-l_iQuL9CVotfaA25sKXESpV1U6O',
+        '0.9to1.skipgram.vec': 'https://drive.google.com/open?id=1xNJC-l_iQuL9CVotfaA25sKXESpV1U6O',
+        '0to0.1.glove.vec': '',
     }
 
     @staticmethod
@@ -88,18 +94,26 @@ class EmbeddingDataset(BaseDataset):
         )
 
     def load_embeddings(self, url_name: str):
+        print(f'Loading {url_name}...')
         file_path = os.path.join(self.data_root, url_name)
-        words = []
-        vecs = []
         with open(file_path, 'r') as f:
-            for line in f:
-                fields = line.strip().split()
-                words.append(fields[0])
-                vecs.append([float(v) for v in fields[1:]])
-        vecs = np.asarray(vecs)
+            embedding_index = dict(
+                Parallel(n_jobs=-1)(
+                    delayed(self.load_line_from_file)(line) for line in tqdm(f)
+                )
+            )
+        words = embedding_index.keys()
+        vecs = np.asarray([v for v in embedding_index.values()])
         word2idx = {w: i for i, w in enumerate(words)}
         idx2word = {i: w for i, w in enumerate(words)}
         return vecs, word2idx, idx2word
+
+    @staticmethod
+    def load_line_from_file(line):
+        values = line.rstrip().rsplit(' ')
+        word = values[0]
+        coefs = np.asarray(values[1:], dtype='float32')
+        return word, coefs
 
     def __getitem__(self, index):
         """Return a data point and its metadata information.
@@ -111,7 +125,7 @@ class EmbeddingDataset(BaseDataset):
             a dictionary of data with their names. It usually contains the data itself and its metadata information.
 
         """
-        target_index = (index + np.random.random(0, self.__len__())) % self.__len__()
+        target_index = (index + random.random(0, self.__len__())) % self.__len__()
         return {'source': self.source_vecs[index], 'target': self.target_vecs[target_index]}
 
     def __len__(self):
