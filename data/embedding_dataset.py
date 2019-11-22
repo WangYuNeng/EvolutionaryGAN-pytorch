@@ -125,7 +125,7 @@ class EmbeddingDataset(BaseDataset):
             a dictionary of data with their names. It usually contains the data itself and its metadata information.
 
         """
-        target_index = (index + random.random(0, self.__len__())) % self.__len__()
+        target_index = (index + random.randint(0, self.__len__())) % self.__len__()
         return {'source': self.source_vecs[index], 'target': self.target_vecs[target_index]}
 
     def __len__(self):
