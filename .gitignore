@@ -47,5 +47,5 @@ test/data/legacy_serialized.pt
 *~
 .idea
 
-embedding/genEmbedding/data/*
-embedding/genEmbedding/result/*
+embedding/train_embedding/data/*
+embedding/train_embedding/result/*
