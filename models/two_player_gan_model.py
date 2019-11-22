@@ -16,12 +16,11 @@ You need to implement the following functions:
     <optimize_parameters>: Update network weights; it will be called in every training iteration.
 """
 import torch
-import numpy as np
 from .base_model import BaseModel
 from networks import networks
 from networks.loss import GANLoss, cal_gradient_penalty
+from networks.utils import get_prior
 from util.util import one_hot
-from torch.distributions import Categorical
 
 
 class TwoPlayerGANModel(BaseModel):
@@ -36,7 +35,6 @@ class TwoPlayerGANModel(BaseModel):
         Returns:
             the modified parser.
         """
-        # parser.set_defaults(dataset_mode='aligned')  # You can rewrite default values for this model. For example, this model usually uses aligned dataset as its dataset
         if is_train:
             parser.add_argument('--g_loss_mode', type=str, default='lsgan',
                                 help='lsgan | nsgan | vanilla | wgan | hinge | rsgan')
@@ -58,10 +56,6 @@ class TwoPlayerGANModel(BaseModel):
         """
         BaseModel.__init__(self, opt)  # call the initialization method of BaseModel
 
-        self.opt = opt
-        if opt.d_loss_mode == 'wgan' and not opt.use_gp:
-            raise NotImplementedError('using wgan on D must be with use_gp = True.')
-
         self.loss_names = ['G_real', 'G_fake', 'D_real', 'D_fake', 'D_gp', 'G', 'D']
         self.visual_names = ['real_visual', 'gen_visual']
 
@@ -70,10 +64,7 @@ class TwoPlayerGANModel(BaseModel):
         else:
             self.model_names = ['G']
 
-        if self.opt.cgan:
-            probs = np.ones(self.opt.cat_num) / self.opt.cat_num
-            self.CatDis = Categorical(torch.tensor(probs))
-        # define networks 
+        # define networks
         self.netG = networks.define_G(opt, self.device)
         if self.isTrain:
             # define a discriminator;
@@ -89,58 +80,53 @@ class TwoPlayerGANModel(BaseModel):
             self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=opt.lr_d, betas=(opt.beta1, opt.beta2))
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
-        # visualize settings
-        self.N = int(np.trunc(np.sqrt(min(opt.batch_size, 64))))
-        if self.opt.z_type == 'Gaussian':
-            self.z_fixed = torch.randn(self.N * self.N, opt.z_dim, 1, 1, device=self.device)
-        elif self.opt.z_type == 'Uniform':
-            self.z_fixed = torch.rand(self.N * self.N, opt.z_dim, 1, 1, device=self.device) * 2. - 1.
-        if self.opt.cgan:
-            yf = self.CatDis.sample([self.N * self.N])
-            self.y_fixed = one_hot(yf, [self.N * self.N, self.opt.cat_num])
 
     def forward(self, batch_size=None):
         bs = self.opt.batch_size if batch_size is None else batch_size
-        if self.opt.z_type == 'Gaussian':
-            z = torch.randn(bs, self.opt.z_dim, 1, 1, device=self.device)
-        elif self.opt.z_type == 'Uniform':
-            z = torch.rand(bs, self.opt.z_dim, 1, 1, device=self.device) * 2. - 1.
-
+        z = get_prior(batch_size, self.opt.z_dim, self.opt.z_type, self.device)
+        y = None
         if not self.opt.cgan:
-            self.gen_imgs = self.netG(z)
+            gen_imgs = self.netG(z)
         else:
             y = self.CatDis.sample([bs])
-            self.y_ = one_hot(y, [bs, self.opt.cat_num])
-            self.gen_imgs = self.netG(z, self.y_)
+            y = one_hot(y, [bs, self.opt.cat_num])
+            gen_imgs = self.netG(z, y)
+        return gen_imgs, y
 
-    def backward_G(self):
+    def backward_G(self, real_imgs, gen_imgs, targets, y):
         # pass D 
         if not self.opt.cgan:
-            self.fake_out = self.netD(self.gen_imgs)
-            self.real_out = self.netD(self.real_imgs)
+            fake_out = self.netD(gen_imgs)
+            real_out = self.netD(real_imgs)
         else:
-            self.fake_out = self.netD(self.gen_imgs, self.y_)
-            self.real_out = self.netD(self.real_imgs, self.targets)
+            fake_out = self.netD(gen_imgs, y)
+            real_out = self.netD(real_imgs, targets)
 
-        self.loss_G_fake, self.loss_G_real = self.criterionG(self.fake_out, self.real_out)
+        self.loss_G_fake, self.loss_G_real = self.criterionG(fake_out, real_out)
         self.loss_G = self.loss_G_fake + self.loss_G_real
         self.loss_G.backward()
 
-    def backward_D(self):
-        self.gen_imgs = self.gen_imgs.detach()
+    def backward_D(self, real_imgs, gen_imgs, targets, y):
+        gen_imgs = gen_imgs.detach()
         # pass D 
         if not self.opt.cgan:
-            self.fake_out = self.netD(self.gen_imgs)
-            self.real_out = self.netD(self.real_imgs)
+            fake_out = self.netD(gen_imgs)
+            real_out = self.netD(real_imgs)
         else:
-            self.fake_out = self.netD(self.gen_imgs, self.y_)
-            self.real_out = self.netD(self.real_imgs, self.targets)
+            fake_out = self.netD(gen_imgs, y)
+            real_out = self.netD(real_imgs, targets)
 
-        self.loss_D_fake, self.loss_D_real = self.criterionD(self.fake_out, self.real_out)
+        self.loss_D_fake, self.loss_D_real = self.criterionD(fake_out, real_out)
         if self.opt.use_gp is True:
-            self.loss_D_gp = \
-            cal_gradient_penalty(self.netD, self.real_imgs, self.gen_imgs, self.device, type='mixed',
-                                          constant=1.0, lambda_gp=10.0)[0]
+            self.loss_D_gp = cal_gradient_penalty(
+                self.netD,
+                real_imgs,
+                gen_imgs,
+                self.device,
+                type='mixed',
+                constant=1.0,
+                lambda_gp=10.0,
+            )[0]
         else:
             self.loss_D_gp = 0.
 
@@ -148,20 +134,23 @@ class TwoPlayerGANModel(BaseModel):
         self.loss_D.backward()
 
     def optimize_parameters(self):
+        input_imgs, input_target = self.inputs['image'], self.inputs['target']
         for i in range(self.opt.D_iters + 1):
-            self.real_imgs = self.input_imgs[i * self.opt.batch_size:(i + 1) * self.opt.batch_size, :, :, :]
+            real_imgs = input_imgs[i * self.opt.batch_size:(i + 1) * self.opt.batch_size]
             if self.opt.cgan:
-                self.targets = self.input_target[i * self.opt.batch_size:(i + 1) * self.opt.batch_size, :]
-            self.forward()
+                targets = input_target[i * self.opt.batch_size:(i + 1) * self.opt.batch_size]
+            else:
+                targets = None
+            gen_imgs, y = self.forward()
             # update G
             if i == 0:
                 self.set_requires_grad(self.netD, False)
                 self.optimizer_G.zero_grad()
-                self.backward_G()
+                self.backward_G(real_imgs, gen_imgs, targets, y)
                 self.optimizer_G.step()
             # update D
             else:
                 self.set_requires_grad(self.netD, True)
                 self.optimizer_D.zero_grad()
-                self.backward_D()
+                self.backward_D(real_imgs, gen_imgs, targets, y)
                 self.optimizer_D.step()

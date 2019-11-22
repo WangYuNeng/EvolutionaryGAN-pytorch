@@ -20,8 +20,8 @@ import numpy as np
 from .base_model import BaseModel
 from networks import networks
 from networks.loss import GANLoss, cal_gradient_penalty
+from networks.utils import get_prior
 from util.util import one_hot
-from torch.distributions import Categorical
 
 import copy 
 import math 
@@ -71,11 +71,6 @@ class EGANModel(BaseModel):
         - define loss function, visualization images, model names, and optimizers
         """
         BaseModel.__init__(self, opt)  # call the initialization method of BaseModel
-
-        self.opt = opt
-        if opt.d_loss_mode == 'wgan' and not opt.use_gp:
-            raise NotImplementedError('using wgan on D must be with use_gp = True.')
-
         self.loss_names = ['G_real', 'G_fake', 'D_real', 'D_fake', 'D_gp', 'G', 'D']
         self.visual_names = ['real_visual', 'gen_visual']
 
@@ -83,10 +78,6 @@ class EGANModel(BaseModel):
             self.model_names = ['G', 'D']
         else:
             self.model_names = ['G']
-
-        if self.opt.cgan:
-            probs = np.ones(self.opt.cat_num) / self.opt.cat_num
-            self.CatDis = Categorical(torch.tensor(probs))
 
         # define networks 
         self.netG = networks.define_G(opt, self.gpu_ids)
@@ -115,26 +106,13 @@ class EGANModel(BaseModel):
         for i in range(opt.candi_num): 
             self.G_candis.append(copy.deepcopy(self.netG.state_dict()))
             self.optG_candis.append(copy.deepcopy(self.optimizer_G.state_dict()))
-        
-        # visualize settings
-        self.N = int(np.trunc(np.sqrt(min(opt.batch_size, 64))))
-        if self.opt.z_type == 'Gaussian': 
-            self.z_fixed = torch.randn(self.N*self.N, opt.z_dim, 1, 1, device=self.device) 
-        elif self.opt.z_type == 'Uniform': 
-            self.z_fixed = torch.rand(self.N*self.N, opt.z_dim, 1, 1, device=self.device)*2. - 1. 
-        if self.opt.cgan:
-            yf = self.CatDis.sample([self.N*self.N])
-            self.y_fixed = one_hot(yf, [self.N*self.N, self.opt.cat_num])
 
         # the # of image for each evaluation
         self.eval_size = max(math.ceil((opt.batch_size * opt.D_iters) / opt.candi_num), opt.eval_size)
 
     def forward(self, batch_size=None):
         bs = self.opt.batch_size if batch_size is None else batch_size
-        if self.opt.z_type == 'Gaussian': 
-            z = torch.randn(bs, self.opt.z_dim, 1, 1, device=self.device) 
-        elif self.opt.z_type == 'Uniform': 
-            z = torch.rand(bs, self.opt.z_dim, 1, 1, device=self.device)*2. - 1. 
+        z = get_prior(batch_size, self.opt.z_dim, self.opt.z_type, self.device)
         # Fake images
         if not self.opt.cgan:
             gen_imgs = self.netG(z)
@@ -177,9 +155,9 @@ class EGANModel(BaseModel):
     def optimize_parameters(self):
         input_imgs, input_target = self.inputs['image'], self.inputs['target']
         for i in range(self.opt.D_iters + 1):
-            self.real_imgs = input_imgs[i*self.opt.batch_size:(i+1)*self.opt.batch_size,:,:,:]
+            self.real_imgs = input_imgs[i * self.opt.batch_size: (i+1) * self.opt.batch_size]
             if self.opt.cgan:
-                self.targets = input_target[i*self.opt.batch_size:(i+1)*self.opt.batch_size,:]
+                self.targets = input_target[i * self.opt.batch_size:(i+1) * self.opt.batch_size]
             # update G
             if i == 0:
                 self.Fitness, self.evalimgs, self.evaly, self.sel_mut = self.Evo_G()
@@ -192,15 +170,15 @@ class EGANModel(BaseModel):
             else: 
                 self.set_requires_grad(self.netD, True)
                 self.optimizer_D.zero_grad()
-                self.gen_imgs = self.evalimgs[(i-1)*self.opt.batch_size: i*self.opt.batch_size].detach()
-                self.y_ = self.evaly[(i-1)*self.opt.batch_size: i*self.opt.batch_size] if self.opt.cgan else None
+                self.gen_imgs = self.evalimgs[(i - 1) * self.opt.batch_size: i * self.opt.batch_size].detach()
+                self.y_ = self.evaly[(i - 1) * self.opt.batch_size: i * self.opt.batch_size] if self.opt.cgan else None
                 self.backward_D()
                 self.optimizer_D.step()
 
     def Evo_G(self):
         input_imgs, input_target = self.inputs['image'], self.inputs['target']
-        eval_imgs = input_imgs[-self.eval_size:,:,:,:]
-        eval_targets = input_target[-self.eval_size:,:] if self.opt.cgan else None
+        eval_imgs = input_imgs[-self.eval_size:]
+        eval_targets = input_target[-self.eval_size:] if self.opt.cgan else None
 
         # define real images pass D
         self.real_out = self.netD(self.real_imgs) if not self.opt.cgan else self.netD(self.real_imgs, self.targets)

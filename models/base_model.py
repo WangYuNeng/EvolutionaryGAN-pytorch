@@ -5,7 +5,8 @@ from abc import ABC, abstractmethod
 from networks import networks
 
 from collections import OrderedDict
-from util.util import visualize_imgs
+from util.util import visualize_imgs, one_hot
+from torch.distributions import Categorical
 
 
 class BaseModel(ABC):
@@ -33,6 +34,12 @@ class BaseModel(ABC):
             -- self.optimizers (optimizer list):    define and initialize optimizers. You can define one optimizer for each network. If two networks are updated at the same time, you can use itertools.chain to group them. See cycle_gan_model.py for an example.
         """
         self.opt = opt
+        if opt.d_loss_mode == 'wgan' and not opt.use_gp:
+            raise NotImplementedError('using wgan on D must be with use_gp = True.')
+        if self.opt.cgan:
+            probs = np.ones(self.opt.cat_num) / self.opt.cat_num
+            self.CatDis = Categorical(torch.tensor(probs))
+
         self.gpu_ids = opt.gpu_ids
         self.isTrain = opt.isTrain
         self.device = torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device(
@@ -46,6 +53,16 @@ class BaseModel(ABC):
         self.optimizers = []
         self.image_paths = []
         self.metric = 0  # used for learning rate policy 'plateau'
+
+        # visualize settings
+        self.N = int(np.trunc(np.sqrt(min(opt.batch_size, 64))))
+        if self.opt.z_type == 'Gaussian':
+            self.z_fixed = torch.randn(self.N*self.N, opt.z_dim, 1, 1, device=self.device)
+        elif self.opt.z_type == 'Uniform':
+            self.z_fixed = torch.rand(self.N*self.N, opt.z_dim, 1, 1, device=self.device)*2. - 1.
+        if self.opt.cgan:
+            yf = self.CatDis.sample([self.N*self.N])
+            self.y_fixed = one_hot(yf, [self.N*self.N, self.opt.cat_num])
 
     @staticmethod
     def modify_commandline_options(parser, is_train):
