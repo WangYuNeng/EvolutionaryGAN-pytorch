@@ -23,6 +23,7 @@ from options.train_options import TrainOptions
 from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
+from util.evaluator import Evaluator
 
 if __name__ == '__main__':
     opt = TrainOptions().parse()   # get training options
@@ -31,6 +32,7 @@ if __name__ == '__main__':
     print('The number of training samples = %d' % dataset_size)
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
+    evaluator = Evaluator(opt, model, dataset)
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
     epoch = 0
@@ -66,7 +68,7 @@ if __name__ == '__main__':
                     visualizer.plot_current_losses(epoch, float(total_iters) / dataset_size, losses)
 
             if total_iters % opt.score_freq == 0:    # print generation scores and save logging information to the disk 
-                scores = model.get_current_scores()
+                scores = evaluator.get_current_scores()
                 t_comp = (time.time() - iter_start_time) / opt.batch_size
                 visualizer.print_current_scores(epoch, total_iters, scores)
                 if opt.display_id > 0:
@@ -86,6 +88,3 @@ if __name__ == '__main__':
 
         epoch += 1
         print('(epoch_%d) End of giters %d / %d \t Time Taken: %d sec' % (epoch, total_iters, opt.total_num_giters, time.time() - epoch_start_time))
-
-        #print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.niter + opt.niter_decay, time.time() - epoch_start_time))
-        #model.update_learning_rate()                     # update learning rates at the end of every epoch.
