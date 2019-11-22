@@ -18,18 +18,17 @@ You need to implement the following functions:
 import torch
 import numpy as np 
 from .base_model import BaseModel
-from . import networks
-from util.util import prepare_z_y, one_hot, visualize_imgs 
+from networks import networks
+from networks.loss import GANLoss, cal_gradient_penalty
+from util.util import one_hot
 from torch.distributions import Categorical
-from collections import OrderedDict
-from TTUR import fid
-from util.inception import get_inception_score
-from inception_pytorch import inception_utils
 
 import copy 
 import math 
 
+
 class EGANModel(BaseModel):
+
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
         """Add new model-specific options and rewrite default values for existing options.
@@ -41,10 +40,19 @@ class EGANModel(BaseModel):
         Returns:
             the modified parser.
         """
-        #parser.set_defaults(dataset_mode='aligned')  # You can rewrite default values for this model. For example, this model usually uses aligned dataset as its dataset
         if is_train:
-            parser.add_argument('--g_loss_mode', nargs='*', default=['nsgan','lsgan','vanilla'], help='lsgan | nsgan | vanilla | wgan | hinge | rsgan')
-            parser.add_argument('--d_loss_mode', type=str, default='lsgan', help='lsgan | nsgan | vanilla | wgan | hinge | rsgan') 
+            parser.add_argument(
+                '--g_loss_mode',
+                nargs='*',
+                default=['nsgan', 'lsgan', 'vanilla'],
+                help='lsgan | nsgan | vanilla | wgan | hinge | rsgan',
+            )
+            parser.add_argument(
+                '--d_loss_mode',
+                type=str,
+                default='lsgan',
+                help='lsgan | nsgan | vanilla | wgan | hinge | rsgan',
+            )
             parser.add_argument('--which_D', type=str, default='S', help='Standard(S) | Relativistic_average (Ra)') 
 
             parser.add_argument('--lambda_f', type=float, default=0.1, help='the hyperparameter that balance Fq and Fd')
@@ -77,39 +85,39 @@ class EGANModel(BaseModel):
             self.model_names = ['G']
 
         if self.opt.cgan:
-            probs = np.ones(self.opt.cat_num)/self.opt.cat_num 
+            probs = np.ones(self.opt.cat_num) / self.opt.cat_num
             self.CatDis = Categorical(torch.tensor(probs))
 
         # define networks 
-        self.netG = networks.define_G(opt.z_dim, opt.output_nc, opt.ngf, opt.netG,
-                opt.g_norm, opt.cgan, opt.cat_num, not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+        self.netG = networks.define_G(opt, self.gpu_ids)
 
-        if self.isTrain:  # define a discriminator; conditional GANs need to take both input and output images; Therefore, #channels for D is input_nc + output_nc
-            self.netD = networks.define_D(opt.input_nc, opt.ndf, opt.netD,
-                                          opt.d_norm, opt.cgan, opt.cat_num, opt.init_type, opt.init_gain, self.gpu_ids)
+        if self.isTrain:
+            # define a discriminator; conditional GANs need to take both input and output images;
+            # Therefore, #channels for D is input_nc + output_nc
+            self.netD = networks.define_D(opt, self.gpu_ids)
 
         if self.isTrain:  # only defined during training time
             # define G mutations 
             self.G_mutations = []
             for g_loss in opt.g_loss_mode: 
-                self.G_mutations.append(networks.GANLoss(g_loss, 'G', opt.which_D).to(self.device))
+                self.G_mutations.append(GANLoss(g_loss, 'G', opt.which_D).to(self.device))
             # define loss functions
-            self.criterionD = networks.GANLoss(opt.d_loss_mode, 'D', opt.which_D).to(self.device)
+            self.criterionD = GANLoss(opt.d_loss_mode, 'D', opt.which_D).to(self.device)
             # initialize optimizers
             self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr_g, betas=(opt.beta1, opt.beta2))
             self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=opt.lr_d, betas=(opt.beta1, opt.beta2))
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
         
-        # Evolutinoary candidatures setting (init) 
+        # Evolutionary candidatures setting (init)
         self.G_candis = [] 
         self.optG_candis = [] 
         for i in range(opt.candi_num): 
             self.G_candis.append(copy.deepcopy(self.netG.state_dict()))
             self.optG_candis.append(copy.deepcopy(self.optimizer_G.state_dict()))
         
-        # visulize settings 
-        self.N =int(np.trunc(np.sqrt(min(opt.batch_size, 64))))
+        # visualize settings
+        self.N = int(np.trunc(np.sqrt(min(opt.batch_size, 64))))
         if self.opt.z_type == 'Gaussian': 
             self.z_fixed = torch.randn(self.N*self.N, opt.z_dim, 1, 1, device=self.device) 
         elif self.opt.z_type == 'Uniform': 
@@ -118,17 +126,10 @@ class EGANModel(BaseModel):
             yf = self.CatDis.sample([self.N*self.N])
             self.y_fixed = one_hot(yf, [self.N*self.N, self.opt.cat_num])
 
-        # the # of image for each evluation
+        # the # of image for each evaluation
         self.eval_size = max(math.ceil((opt.batch_size * opt.D_iters) / opt.candi_num), opt.eval_size)
 
-
-    def set_input(self, input):
-        """input: a dictionary that contains the data itself and its metadata information."""
-        self.input_imgs = input['image'].to(self.device)  
-        if self.opt.cgan:
-            self.input_targets = input['target'].to(self.device) 
-
-    def forward(self, batch_size = None):
+    def forward(self, batch_size=None):
         bs = self.opt.batch_size if batch_size is None else batch_size
         if self.opt.z_type == 'Gaussian': 
             z = torch.randn(bs, self.opt.z_dim, 1, 1, device=self.device) 
@@ -166,7 +167,7 @@ class EGANModel(BaseModel):
 
         self.loss_D_fake, self.loss_D_real = self.criterionD(self.fake_out, self.real_out) 
         if self.opt.use_gp is True: 
-            self.loss_D_gp = networks.cal_gradient_penalty(self.netD, self.real_imgs, self.gen_imgs, self.device, type='mixed', constant=1.0, lambda_gp=10.0)[0]
+            self.loss_D_gp = cal_gradient_penalty(self.netD, self.real_imgs, self.gen_imgs, self.device, type='mixed', constant=1.0, lambda_gp=10.0)[0]
         else:
             self.loss_D_gp = 0.
 
@@ -174,10 +175,11 @@ class EGANModel(BaseModel):
         self.loss_D.backward() 
 
     def optimize_parameters(self):
+        input_imgs, input_target = self.inputs['image'], self.inputs['target']
         for i in range(self.opt.D_iters + 1):
-            self.real_imgs = self.input_imgs[i*self.opt.batch_size:(i+1)*self.opt.batch_size,:,:,:]
+            self.real_imgs = input_imgs[i*self.opt.batch_size:(i+1)*self.opt.batch_size,:,:,:]
             if self.opt.cgan:
-                self.targets = self.input_target[i*self.opt.batch_size:(i+1)*self.opt.batch_size,:] 
+                self.targets = input_target[i*self.opt.batch_size:(i+1)*self.opt.batch_size,:]
             # update G
             if i == 0:
                 self.Fitness, self.evalimgs, self.evaly, self.sel_mut = self.Evo_G()
@@ -196,8 +198,9 @@ class EGANModel(BaseModel):
                 self.optimizer_D.step()
 
     def Evo_G(self):
-        eval_imgs = self.input_imgs[-self.eval_size:,:,:,:]
-        eval_targets = self.input_target[-self.eval_size:,:] if self.opt.cgan else None
+        input_imgs, input_target = self.inputs['image'], self.inputs['target']
+        eval_imgs = input_imgs[-self.eval_size:,:,:,:]
+        eval_targets = input_target[-self.eval_size:,:] if self.opt.cgan else None
 
         # define real images pass D
         self.real_out = self.netD(self.real_imgs) if not self.opt.cgan else self.netD(self.real_imgs, self.targets)
@@ -210,7 +213,7 @@ class EGANModel(BaseModel):
         evaly_list = [] 
         selected_mutation = [] 
         count = 0
-        # variation-evluation-selection
+        # variation-evaluation-selection
         for i in range(self.opt.candi_num):
             for j, criterionG in enumerate(self.G_mutations): 
                 # Variation 

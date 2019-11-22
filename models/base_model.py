@@ -2,7 +2,7 @@ import os
 import torch
 import numpy as np
 from abc import ABC, abstractmethod
-from . import networks
+from networks import networks
 
 from collections import OrderedDict
 from util.util import visualize_imgs
@@ -60,14 +60,15 @@ class BaseModel(ABC):
         """
         return parser
 
-    @abstractmethod
-    def set_input(self, input):
+    def set_input(self, inp: dict):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
 
         Parameters:
-            input (dict): includes the data itself and its metadata information.
+            inp (dict): includes the data itself and its metadata information.
         """
-        pass
+        self.inputs = {
+            key: value.to(self.device) for key, value in inp.items()
+        }
 
     @abstractmethod
     def forward(self):
