@@ -77,10 +77,10 @@ class BaseModel(ABC):
                     inception_path = fid.check_or_download_inception(INCEPTION_PATH) # download inception network
                     fid.create_inception_graph(inception_path)  # load the graph into the current TF graph
 
-                    config = tf.ConfigProto()
-                    config.gpu_options.allow_growth = True
-                    self.sess = tf.Session(config = config)
-                    self.sess.run(tf.global_variables_initializer())
+                    # config = tf.ConfigProto()
+                    # config.gpu_options.allow_growth = True
+                    # self.sess = tf.Session(config = config)
+                    # self.sess.run(tf.global_variables_initializer())
 
     @staticmethod
     def modify_commandline_options(parser, is_train):
