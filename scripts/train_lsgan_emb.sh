@@ -1,5 +1,5 @@
 set -ex
-python train.py --name lsgan_cifar10 \
+python train.py --name lsgan_emb \
        --dataset_mode embedding --batch_size 32 --dataroot None \
        --model two_player_gan --gan_mode unconditional \
        --gpu_ids 0 \

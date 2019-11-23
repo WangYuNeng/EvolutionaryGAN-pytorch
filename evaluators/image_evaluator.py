@@ -1,12 +1,9 @@
 from collections import OrderedDict
 
-import torch
 import numpy as np
 
-from util.inception import get_inception_score
-from util.util import one_hot
-from TTUR import fid
-from inception_pytorch import inception_utils
+from evaluators.TTUR import fid
+from evaluators.inception_pytorch import inception_utils
 from .base_evaluator import BaseEvaluator
 
 

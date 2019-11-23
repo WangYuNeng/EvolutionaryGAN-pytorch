@@ -1,8 +1,8 @@
 import torch
 from .base_model import BaseModel
-from networks import networks
-from networks.loss import GANLoss, cal_gradient_penalty
-from networks.utils import get_prior
+from models.networks import networks
+from models.networks import GANLoss, cal_gradient_penalty
+from models.networks import get_prior
 from util.util import one_hot
 
 

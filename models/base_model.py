@@ -1,7 +1,7 @@
 import os
 import torch
 from abc import ABC, abstractmethod
-from networks import networks
+from models.networks import networks
 
 from collections import OrderedDict
 

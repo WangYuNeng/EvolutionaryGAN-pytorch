@@ -127,12 +127,12 @@ def define_G(opt, gpu_ids):
     norm_layer = get_norm_layer(norm_type=opt.g_norm)
 
     if opt.netG == 'DCGAN':
-        from networks.DCGAN_nets import DCGANGenerator
+        from models.networks.DCGAN_nets import DCGANGenerator
         net = DCGANGenerator(
             opt.z_dim, ngf=opt.ngf, output_nc=opt.output_nc, norm_layer=norm_layer
         )
     elif opt.netG == 'fc':
-        from networks.fc import FCGenerator
+        from models.networks import FCGenerator
         net = FCGenerator()
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % opt.netG)
@@ -150,10 +150,10 @@ def define_D(opt, gpu_ids=()):
     norm_layer = get_norm_layer(norm_type=opt.d_norm)
 
     if opt.netD == 'DCGAN':  # default PatchGAN classifier
-        from networks.DCGAN_nets import DCGANDiscriminator
+        from models.networks.DCGAN_nets import DCGANDiscriminator
         net = DCGANDiscriminator(opt.ndf, opt.input_nc, norm_layer)
     elif opt.netG == 'fc':
-        from networks.fc import FCDiscriminator
+        from models.networks import FCDiscriminator
         net = FCDiscriminator()
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % net)

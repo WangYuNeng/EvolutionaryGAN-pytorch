@@ -1,5 +1,5 @@
 set -ex
-python train.py --name egan_cifar10 \
+python train.py --name egan_emb \
        --dataset_mode embedding --batch_size 32 --eval_size 256 --dataroot None \
        --model egan --gan_mode unconditional \
        --gpu_ids 0 \
