@@ -7,24 +7,15 @@ from util.inception import get_inception_score
 from util.util import one_hot
 from TTUR import fid
 from inception_pytorch import inception_utils
-from models.base_model import BaseModel
-from data.base_dataset import BaseDataset
+from .base_evaluator import BaseEvaluator
 
 
-class Evaluator:
+class ImageEvaluator(BaseEvaluator):
 
-    def __init__(self, opt, model: BaseModel, dataset: BaseDataset):
-        self.opt = opt
-        self.model = model
-        self.device = model.get_device()
-        self.dataset = dataset
-
+    def __init__(self, opt, model, dataset):
+        super().__init__(opt, model, dataset)
         # scores init
-        if self.opt.dataset_mode == "embedding":
-            pass
-            # self.get_embedding_metrics =
-            #   TODO
-        elif self.opt.use_pytorch_scores and self.opt.score_name is not None:
+        if self.opt.use_pytorch_scores and self.opt.score_name is not None:
             no_FID = not('FID' in self.opt.score_name)
             no_IS = not('IS' in self.opt.score_name)
             parallel = len(opt.gpu_ids) > 1

@@ -23,7 +23,7 @@ from options.train_options import TrainOptions
 from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
-from util.evaluator import Evaluator
+from evaluators import get_evaluator
 
 if __name__ == '__main__':
     opt = TrainOptions().parse()   # get training options
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     print('The number of training samples = %d' % dataset_size)
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
-    evaluator = Evaluator(opt, model, dataset)
+    evaluator = get_evaluator(opt, model=model, dataset=dataset)
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
     epoch = 0
