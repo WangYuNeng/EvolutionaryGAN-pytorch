@@ -68,11 +68,11 @@ class Evaluator:
             elif self.opt.z_type == 'Uniform':
                 z = torch.rand(self.opt.fid_batch_size, self.opt.z_dim, 1, 1, device=self.device) * 2. - 1.
 
-            if self.opt.cgan:
+            if self.opt.gan_mode == 'conditional':
                 y = self.CatDis.sample([self.opt.fid_batch_size])
                 y = one_hot(y, [self.opt.fid_batch_size])
 
-            if not self.opt.cgan:
+            if not self.opt.gan_mode == 'conditional':
                 gen_s = self.netG(z).detach()
             else:
                 gen_s = self.netG(z, y).detach()

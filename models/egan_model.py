@@ -112,20 +112,24 @@ class EGANModel(BaseModel):
 
     def forward(self, batch_size=None):
         bs = self.opt.batch_size if batch_size is None else batch_size
-        z = get_prior(batch_size, self.opt.z_dim, self.opt.z_type, self.device)
+        z = get_prior(bs, self.opt.z_dim, self.opt.z_type, self.device)
         # Fake images
-        if not self.opt.cgan:
-            gen_imgs = self.netG(z)
-            y_ = None 
-        else:
+        if self.opt.gan_mode == "conditional":
             y = self.CatDis.sample([bs])
             y_ = one_hot(y, [bs, self.opt.cat_num])
             gen_imgs = self.netG(z, self.y_)
+        elif self.opt.gan_mode == 'unconditional':
+            pass
+        elif self.opt.gan_mode == 'unconditional-z':
+            gen_imgs = self.netG(z)
+            y_ = None
+        else:
+            raise ValueError(f'unsupported gan_mode {self.opt.gan_mode}')
         return gen_imgs, y_
 
     def backward_G(self, criterionG):
         # pass D 
-        if not self.opt.cgan:
+        if not self.opt.gan_mode == 'conditional':
             self.fake_out = self.netD(self.gen_imgs)
         else:
             self.fake_out = self.netD(self.gen_imgs, self.y_)
@@ -136,7 +140,7 @@ class EGANModel(BaseModel):
 
     def backward_D(self):
         # pass D 
-        if not self.opt.cgan:
+        if not self.opt.gan_mode == 'conditional':
             self.fake_out = self.netD(self.gen_imgs)
             self.real_out = self.netD(self.real_imgs)
         else:
@@ -156,32 +160,32 @@ class EGANModel(BaseModel):
         input_imgs, input_target = self.inputs['source'], self.inputs['target']
         for i in range(self.opt.D_iters + 1):
             self.real_imgs = input_imgs[i * self.opt.batch_size: (i+1) * self.opt.batch_size]
-            if self.opt.cgan:
+            if self.opt.gan_mode == 'conditional':
                 self.targets = input_target[i * self.opt.batch_size:(i+1) * self.opt.batch_size]
             # update G
             if i == 0:
                 self.Fitness, self.evalimgs, self.evaly, self.sel_mut = self.Evo_G()
                 self.evalimgs = torch.cat(self.evalimgs, dim=0) 
-                self.evaly = torch.cat(self.evaly, dim=0) if self.opt.cgan else None 
+                self.evaly = torch.cat(self.evaly, dim=0) if self.opt.gan_mode == 'conditional' else None
                 shuffle_ids = torch.randperm(self.evalimgs.size()[0])
                 self.evalimgs = self.evalimgs[shuffle_ids]
-                self.evaly = self.evaly[shuffle_ids] if self.opt.cgan else None 
+                self.evaly = self.evaly[shuffle_ids] if self.opt.gan_mode == 'conditional' else None
             # update D
             else: 
                 self.set_requires_grad(self.netD, True)
                 self.optimizer_D.zero_grad()
                 self.gen_imgs = self.evalimgs[(i - 1) * self.opt.batch_size: i * self.opt.batch_size].detach()
-                self.y_ = self.evaly[(i - 1) * self.opt.batch_size: i * self.opt.batch_size] if self.opt.cgan else None
+                self.y_ = self.evaly[(i - 1) * self.opt.batch_size: i * self.opt.batch_size] if self.opt.gan_mode == 'conditional' else None
                 self.backward_D()
                 self.optimizer_D.step()
 
     def Evo_G(self):
         input_imgs, input_target = self.inputs['source'], self.inputs['target']
         eval_imgs = input_imgs[-self.eval_size:]
-        eval_targets = input_target[-self.eval_size:] if self.opt.cgan else None
+        eval_targets = input_target[-self.eval_size:] if self.opt.gan_mode == 'conditional' else None
 
         # define real images pass D
-        self.real_out = self.netD(self.real_imgs) if not self.opt.cgan else self.netD(self.real_imgs, self.targets)
+        self.real_out = self.netD(self.real_imgs) if not self.opt.gan_mode == 'conditional' else self.netD(self.real_imgs, self.targets)
 
         F_list = np.zeros(self.opt.candi_num)
         Fit_list = []  
@@ -234,8 +238,8 @@ class EGANModel(BaseModel):
 
     def fitness_score(self, eval_fake_imgs, eval_fake_y, eval_real_imgs, eval_real_y):
         self.set_requires_grad(self.netD, True)
-        eval_fake = self.netD(eval_fake_imgs) if not self.opt.cgan else self.netD(eval_fake_imgs, eval_fake_y)
-        eval_real = self.netD(eval_real_imgs) if not self.opt.cgan else self.netD(eval_real_imgs, eval_real_y)
+        eval_fake = self.netD(eval_fake_imgs) if not self.opt.gan_mode == 'conditional' else self.netD(eval_fake_imgs, eval_fake_y)
+        eval_real = self.netD(eval_real_imgs) if not self.opt.gan_mode == 'conditional' else self.netD(eval_real_imgs, eval_real_y)
 
         # Quality fitness score
         Fq = eval_fake.data.mean().cpu().numpy()

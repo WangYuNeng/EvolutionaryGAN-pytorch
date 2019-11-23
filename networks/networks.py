@@ -131,6 +131,9 @@ def define_G(opt, gpu_ids):
         net = DCGANGenerator_cifar10(
             opt.z_dim, ngf=opt.ngf, output_nc=opt.output_nc, norm_layer=norm_layer
         )
+    elif opt.netG == 'fc':
+        from networks.fc import FCGenerator
+        net = FCGenerator()
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % opt.netG)
     return init_net(net, opt.init_type, opt.init_gain, gpu_ids)
@@ -149,6 +152,9 @@ def define_D(opt, gpu_ids=()):
     if opt.netD == 'DCGAN_cifar10':  # default PatchGAN classifier
         from networks.DCGAN_nets import DCGANDiscriminator_cifar10
         net = DCGANDiscriminator_cifar10(opt.ndf, opt.input_nc, norm_layer)
+    elif opt.netG == 'fc':
+        from networks.fc import FCDiscriminator
+        net = FCDiscriminator()
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % net)
     return init_net(net, opt.init_type, opt.init_gain, gpu_ids)

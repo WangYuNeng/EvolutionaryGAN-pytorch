@@ -36,7 +36,7 @@ class BaseModel(ABC):
         self.opt = opt
         if opt.d_loss_mode == 'wgan' and not opt.use_gp:
             raise NotImplementedError('using wgan on D must be with use_gp = True.')
-        if self.opt.cgan:
+        if self.opt.gan_mode == 'conditional':
             probs = np.ones(self.opt.cat_num) / self.opt.cat_num
             self.CatDis = Categorical(torch.tensor(probs))
 
@@ -60,7 +60,7 @@ class BaseModel(ABC):
             self.z_fixed = torch.randn(self.N*self.N, opt.z_dim, 1, 1, device=self.device)
         elif self.opt.z_type == 'Uniform':
             self.z_fixed = torch.rand(self.N*self.N, opt.z_dim, 1, 1, device=self.device)*2. - 1.
-        if self.opt.cgan:
+        if self.opt.gan_mode == 'conditional':
             yf = self.CatDis.sample([self.N*self.N])
             self.y_fixed = one_hot(yf, [self.N*self.N, self.opt.cat_num])
 
@@ -253,7 +253,7 @@ class BaseModel(ABC):
 
         visual_ret = OrderedDict()
         # gen_visual
-        if not self.opt.cgan:
+        if not self.opt.gan_mode == 'conditional':
             gen_visual = self.netG(self.z_fixed).detach()
         else:
             gen_visual = self.netG(self.z_fixed, self.y_fixed).detach()

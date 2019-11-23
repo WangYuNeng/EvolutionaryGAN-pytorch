@@ -26,7 +26,7 @@ class BaseOptions():
         parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints', help='models are saved here')
         # model parameters
         parser.add_argument('--model', type=str, default='cycle_gan', help='chooses which model to use. [cycle_gan | pix2pix | test | colorization]')
-        parser.add_argument('--cgan', action='store_true', default=False, help='if use conditional generation')
+        parser.add_argument('--gan_mode', type=str, default='unconditional-z', help='options [unconditional | unconditional-z | conditional ]')
         parser.add_argument('--cat_num', type=int, default=10, help='# of categories of conditional generation')
         parser.add_argument('--z_type', type=str, default='Gaussian', help='Gaussian | Uniform') 
         parser.add_argument('--z_dim', type=int, default=128, help='# of input z(noise) dims: default 128')

@@ -83,19 +83,23 @@ class TwoPlayerGANModel(BaseModel):
 
     def forward(self, batch_size=None):
         bs = self.opt.batch_size if batch_size is None else batch_size
-        z = get_prior(batch_size, self.opt.z_dim, self.opt.z_type, self.device)
+        z = get_prior(bs, self.opt.z_dim, self.opt.z_type, self.device)
         y = None
-        if not self.opt.cgan:
-            gen_imgs = self.netG(z)
-        else:
+        if self.opt.gan_mode == "conditional":
             y = self.CatDis.sample([bs])
             y = one_hot(y, [bs, self.opt.cat_num])
             gen_imgs = self.netG(z, y)
+        elif self.opt.gan_mode == 'unconditional':
+            pass
+        elif self.opt.gan_mode == 'unconditional-z':
+            gen_imgs = self.netG(z)
+        else:
+            raise ValueError(f'unsupported gan_mode {self.opt.gan_mode}')
         return gen_imgs, y
 
     def backward_G(self, real_imgs, gen_imgs, targets, y):
         # pass D 
-        if not self.opt.cgan:
+        if not self.opt.gan_mode == 'conditional':
             fake_out = self.netD(gen_imgs)
             real_out = self.netD(real_imgs)
         else:
@@ -109,7 +113,7 @@ class TwoPlayerGANModel(BaseModel):
     def backward_D(self, real_imgs, gen_imgs, targets, y):
         gen_imgs = gen_imgs.detach()
         # pass D 
-        if not self.opt.cgan:
+        if not self.opt.gan_mode == 'conditional':
             fake_out = self.netD(gen_imgs)
             real_out = self.netD(real_imgs)
         else:
@@ -137,7 +141,7 @@ class TwoPlayerGANModel(BaseModel):
         input_imgs, input_target = self.inputs['source'], self.inputs['target']
         for i in range(self.opt.D_iters + 1):
             real_imgs = input_imgs[i * self.opt.batch_size:(i + 1) * self.opt.batch_size]
-            if self.opt.cgan:
+            if self.opt.gan_mode == 'conditional':
                 targets = input_target[i * self.opt.batch_size:(i + 1) * self.opt.batch_size]
             else:
                 targets = None
