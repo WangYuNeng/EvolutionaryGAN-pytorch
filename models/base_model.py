@@ -1,12 +1,9 @@
 import os
 import torch
-import numpy as np
 from abc import ABC, abstractmethod
 from networks import networks
 
 from collections import OrderedDict
-from util.util import visualize_imgs, one_hot
-from torch.distributions import Categorical
 
 
 class BaseModel(ABC):
@@ -34,12 +31,6 @@ class BaseModel(ABC):
             -- self.optimizers (optimizer list):    define and initialize optimizers. You can define one optimizer for each network. If two networks are updated at the same time, you can use itertools.chain to group them. See cycle_gan_model.py for an example.
         """
         self.opt = opt
-        if opt.d_loss_mode == 'wgan' and not opt.use_gp:
-            raise NotImplementedError('using wgan on D must be with use_gp = True.')
-        if self.opt.gan_mode == 'conditional':
-            probs = np.ones(self.opt.cat_num) / self.opt.cat_num
-            self.CatDis = Categorical(torch.tensor(probs))
-
         self.gpu_ids = opt.gpu_ids
         self.isTrain = opt.isTrain
         self.device = torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device(
@@ -49,21 +40,9 @@ class BaseModel(ABC):
             torch.backends.cudnn.benchmark = True
         self.loss_names = []
         self.model_names = []
-        self.visual_names = []
         self.optimizers = []
-        self.image_paths = []
         self.metric = 0  # used for learning rate policy 'plateau'
         self.step = 0  # counter for training steps
-
-        # visualize settings
-        self.N = int(np.trunc(np.sqrt(min(opt.batch_size, 64))))
-        if self.opt.z_type == 'Gaussian':
-            self.z_fixed = torch.randn(self.N*self.N, opt.z_dim, 1, 1, device=self.device)
-        elif self.opt.z_type == 'Uniform':
-            self.z_fixed = torch.rand(self.N*self.N, opt.z_dim, 1, 1, device=self.device)*2. - 1.
-        if self.opt.gan_mode == 'conditional':
-            yf = self.CatDis.sample([self.N*self.N])
-            self.y_fixed = one_hot(yf, [self.N*self.N, self.opt.cat_num])
 
     @staticmethod
     def modify_commandline_options(parser, is_train):
@@ -89,14 +68,12 @@ class BaseModel(ABC):
         }
 
     @abstractmethod
-    def forward(self):
-        """Run forward pass; called by both functions <optimize_parameters> and <test>."""
-        pass
-
-    @abstractmethod
     def optimize_parameters(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         pass
+
+    def get_device(self):
+        return self.device
 
     def setup(self, opt):
         """Load and print networks; create schedulers
@@ -117,20 +94,6 @@ class BaseModel(ABC):
             if isinstance(name, str):
                 net = getattr(self, 'net' + name)
                 net.eval()
-
-    def test(self):
-        """Forward function used in test time.
-
-        This function wraps <forward> function in no_grad() so we don't save intermediate steps for backprop
-        It also calls <compute_visuals> to produce additional visualization results
-        """
-        with torch.no_grad():
-            self.forward()
-            self.compute_visuals()
-
-    def compute_visuals(self):
-        """Calculate additional output images for visdom and HTML visualization"""
-        pass
 
     def get_image_paths(self):
         """ Return image paths that are used to load current data"""
@@ -231,8 +194,9 @@ class BaseModel(ABC):
                 print('[Network %s] Total number of parameters : %.3f M' % (name, num_params / 1e6))
         print('-----------------------------------------------')
 
-    def set_requires_grad(self, nets, requires_grad=False):
-        """Set requies_grad=Fasle for all the networks to avoid unnecessary computations
+    @staticmethod
+    def set_requires_grad(nets, requires_grad=False):
+        """Set requires_grad=False for all the networks to avoid unnecessary computations
         Parameters:
             nets (network list)   -- a list of networks
             requires_grad (bool)  -- whether the networks require gradients or not
@@ -243,30 +207,3 @@ class BaseModel(ABC):
             if net is not None:
                 for param in net.parameters():
                     param.requires_grad = requires_grad
-
-    # return visualization images. train.py will display these images, and save the images to a html
-    def get_current_visuals(self):
-        # if self.opt.model == 'egan':
-        #     # load current best G
-        #     F = self.Fitness[:, 2]
-        #     idx = np.where(F == max(F))[0][0]
-        #     self.netG.load_state_dict(self.G_candis[idx])
-        #
-        visual_ret = OrderedDict()
-        # # gen_visual
-        # if not self.opt.gan_mode == 'conditional':
-        #     gen_visual = self.netG(self.z_fixed).detach()
-        # else:
-        #     gen_visual = self.netG(self.z_fixed, self.y_fixed).detach()
-        # self.gen_visual = visualize_imgs(gen_visual, self.N, self.opt.crop_size, self.opt.input_nc)
-        #
-        # # real_visual
-        # self.real_visual = visualize_imgs(self.real_imgs, self.N, self.opt.crop_size, self.opt.input_nc)
-        #
-        # for name in self.visual_names:
-        #     if isinstance(name, str):
-        #         visual_ret[name] = getattr(self, name)
-        return visual_ret
-
-    def get_device(self):
-        return self.device
