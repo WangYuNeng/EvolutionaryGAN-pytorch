@@ -100,7 +100,7 @@ def init_weights(net, init_type='normal', init_gain=0.02):
     net.apply(init_func)  # apply the initialization function <init_func>
 
 
-def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
+def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=()):
     """Initialize a network: 1. register CPU/GPU device (with multi-GPU support); 2. initialize the network weights
     Parameters:
         net (network)      -- the network to be initialized

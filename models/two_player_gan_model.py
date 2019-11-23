@@ -31,9 +31,9 @@ class TwoPlayerGANModel(BaseModel):
             self.model_names = ['G']
 
         # define networks
-        self.netG = networks.define_G(opt, self.device)
+        self.netG = networks.define_G(opt, self.opt.gpu_ids)
         if self.isTrain:
-            self.netD = networks.define_D(opt, self.device)
+            self.netD = networks.define_D(opt, self.opt.gpu_ids)
 
             # define loss functions
             self.criterionG = GANLoss(opt.g_loss_mode, 'G', opt.which_D).to(self.device)
@@ -54,8 +54,7 @@ class TwoPlayerGANModel(BaseModel):
             gen_data = self.netG(z, y)
             return {'data': gen_data, 'condition': y}
         elif self.opt.gan_mode == 'unconditional':
-            source = self.inputs['source']
-            gen_data = self.netG(source)
+            gen_data = self.netG(self.inputs)
             return {'data': gen_data}
         elif self.opt.gan_mode == 'unconditional-z':
             z = get_prior(self.opt.batch_size, self.opt.z_dim, self.opt.z_type, self.device)
@@ -97,7 +96,7 @@ class TwoPlayerGANModel(BaseModel):
 
     def optimize_parameters(self):
         gen_data = self.forward()
-        if self.step == 0:
+        if self.step % (self.opt.D_iters + 1) == 0:
             self.set_requires_grad(self.netD, False)
             self.optimizer_G.zero_grad()
             self.backward_G(gen_data)

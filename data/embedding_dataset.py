@@ -88,15 +88,21 @@ class EmbeddingDataset(BaseDataset):
         print(f'Loading {url_name}...')
         file_path = os.path.join(self.data_root, url_name)
         with open(file_path, 'r') as f:
+            vocab_size, emb_dim = [int(i) for i in f.readline().split()]
             embedding_index = dict(
                 Parallel(n_jobs=-1)(
                     delayed(self.load_line_from_file)(line) for line in tqdm(f)
                 )
             )
         words = embedding_index.keys()
-        vecs = np.asarray([v for v in embedding_index.values()])
+        vecs = np.asarray(list(embedding_index.values()))
         word2idx = {w: i for i, w in enumerate(words)}
         idx2word = {i: w for i, w in enumerate(words)}
+        if not len(words) == vocab_size or not vecs.shape[1] == emb_dim:
+            raise ValueError(
+                f'corrupted embedding {file_path},'
+                f'vecs.shape = {vecs.shape}'
+            )
         return vecs, word2idx, idx2word
 
     @staticmethod

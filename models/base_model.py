@@ -246,24 +246,27 @@ class BaseModel(ABC):
 
     # return visualization images. train.py will display these images, and save the images to a html
     def get_current_visuals(self):
-        if self.opt.model == 'egan':
-            # load current best G
-            F = self.Fitness[:, 2]
-            idx = np.where(F == max(F))[0][0]
-            self.netG.load_state_dict(self.G_candis[idx])
-
+        # if self.opt.model == 'egan':
+        #     # load current best G
+        #     F = self.Fitness[:, 2]
+        #     idx = np.where(F == max(F))[0][0]
+        #     self.netG.load_state_dict(self.G_candis[idx])
+        #
         visual_ret = OrderedDict()
-        # gen_visual
-        if not self.opt.gan_mode == 'conditional':
-            gen_visual = self.netG(self.z_fixed).detach()
-        else:
-            gen_visual = self.netG(self.z_fixed, self.y_fixed).detach()
-        self.gen_visual = visualize_imgs(gen_visual, self.N, self.opt.crop_size, self.opt.input_nc)
-
-        # real_visual
-        self.real_visual = visualize_imgs(self.real_imgs, self.N, self.opt.crop_size, self.opt.input_nc)
-
-        for name in self.visual_names:
-            if isinstance(name, str):
-                visual_ret[name] = getattr(self, name)
+        # # gen_visual
+        # if not self.opt.gan_mode == 'conditional':
+        #     gen_visual = self.netG(self.z_fixed).detach()
+        # else:
+        #     gen_visual = self.netG(self.z_fixed, self.y_fixed).detach()
+        # self.gen_visual = visualize_imgs(gen_visual, self.N, self.opt.crop_size, self.opt.input_nc)
+        #
+        # # real_visual
+        # self.real_visual = visualize_imgs(self.real_imgs, self.N, self.opt.crop_size, self.opt.input_nc)
+        #
+        # for name in self.visual_names:
+        #     if isinstance(name, str):
+        #         visual_ret[name] = getattr(self, name)
         return visual_ret
+
+    def get_device(self):
+        return self.device
