@@ -15,9 +15,10 @@ class EmbeddingDataset(BaseDataset):
     https://drive.google.com/drive/folders/1CuI62zaN1TUc-JZA_MEVAQngP7fJR89c
     """
     download_urls = {
-        '0to0.1.cbow.vec': '',
+        '0to0.1.cbow.vec': 'https://drive.google.com/open?id=1rjsPNhAovS5Sx9AocUiEJsjzyPXdov4g',
+        '0.1to0.2.cbow.vec': 'https://drive.google.com/open?id=1jVp8Jtqg5l03TokHEY1Mn91zb549Xy8V',
         '0to0.1.skipgram.vec': 'https://drive.google.com/open?id=1xNJC-l_iQuL9CVotfaA25sKXESpV1U6O',
-        '0.9to1.skipgram.vec': 'https://drive.google.com/open?id=1xNJC-l_iQuL9CVotfaA25sKXESpV1U6O',
+        '0.1to0.2.skipgram.vec': 'https://drive.google.com/open?id=1RGMshfU03ZTLFPf_qqxlYAsGP18m2Nhw',
         '0to0.1.glove.vec': '',
     }
 
@@ -96,6 +97,7 @@ class EmbeddingDataset(BaseDataset):
             )
         words = embedding_index.keys()
         vecs = np.asarray(list(embedding_index.values()))
+        vecs = (vecs - np.mean(vecs, axis=1, keepdims=True)) / np.std(vecs, axis=1, keepdims=True)  # normalize
         word2idx = {w: i for i, w in enumerate(words)}
         idx2word = {i: w for i, w in enumerate(words)}
         if not len(words) == vocab_size or not vecs.shape[1] == emb_dim:
@@ -123,7 +125,7 @@ class EmbeddingDataset(BaseDataset):
 
         """
         target_index = (index + random.randint(0, self.__len__())) % self.__len__()
-        return {'data': self.source_vecs[index], 'source': self.target_vecs[target_index]}
+        return {'data': self.target_vecs[target_index], 'source': self.source_vecs[index], 'source_idx': index}
 
     def __len__(self):
         """Return the total number of word-vectors."""

@@ -49,3 +49,5 @@ test/data/legacy_serialized.pt
 
 embedding/train_embedding/data/*
 embedding/train_embedding/result/*
+monolingual/
+crosslingual

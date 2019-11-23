@@ -1,8 +1,8 @@
 import torch
 from .base_model import BaseModel
 from models.networks import networks
-from models.networks import GANLoss, cal_gradient_penalty
-from models.networks import get_prior
+from models.networks.loss import GANLoss, cal_gradient_penalty
+from models.networks.utils import get_prior
 from util.util import one_hot
 
 
@@ -21,7 +21,7 @@ class TwoPlayerGANModel(BaseModel):
 
     def __init__(self, opt):
         BaseModel.__init__(self, opt)
-
+        self.output = None
         self.loss_names = ['G_real', 'G_fake', 'D_real', 'D_fake', 'D_gp', 'G', 'D']
         self.visual_names = ['real_visual', 'gen_visual']
 
@@ -52,16 +52,25 @@ class TwoPlayerGANModel(BaseModel):
             y = self.CatDis.sample([batch_size])
             y = one_hot(y, [batch_size, self.opt.cat_num])
             gen_data = self.netG(z, y)
+            self.set_output(gen_data)
             return {'data': gen_data, 'condition': y}
         elif self.opt.gan_mode == 'unconditional':
             gen_data = self.netG(self.inputs)
+            self.set_output(gen_data)
             return {'data': gen_data}
         elif self.opt.gan_mode == 'unconditional-z':
             z = get_prior(self.opt.batch_size, self.opt.z_dim, self.opt.z_type, self.device)
             gen_data = self.netG(z)
+            self.set_output(gen_data)
             return {'data': gen_data}
         else:
             raise ValueError(f'unsupported gan_mode {self.opt.gan_mode}')
+
+    def set_output(self, x):
+        self.output = x
+
+    def get_output(self):
+        return self.output
 
     def backward_G(self, gen_data):
         # pass D
@@ -101,6 +110,7 @@ class TwoPlayerGANModel(BaseModel):
             self.optimizer_G.zero_grad()
             self.backward_G(gen_data)
             self.optimizer_G.step()
+            self.orthogonalize(self.netG)
         else:
             self.set_requires_grad(self.netD, True)
             self.optimizer_D.zero_grad()
@@ -108,3 +118,8 @@ class TwoPlayerGANModel(BaseModel):
             self.optimizer_D.step()
 
         self.step += 1
+
+    @staticmethod
+    def orthogonalize(generator, beta=0.001):
+        W = generator.module.layer.weight.data
+        W.copy_((1 + beta) * W - beta * W.mm(W.transpose(0, 1).mm(W)))

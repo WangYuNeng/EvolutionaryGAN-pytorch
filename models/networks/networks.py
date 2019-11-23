@@ -87,6 +87,9 @@ def init_weights(net, init_type='normal', init_gain=0.02):
                 init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
             elif init_type == 'orthogonal':
                 init.orthogonal_(m.weight.data, gain=init_gain)
+            elif init_type == 'diagonal':
+                if m.weight.shape[0] == m.weight.shape[1]:
+                    m.weight.data.copy_(torch.diag(torch.ones(m.weight.shape[0])))
             else:
                 raise NotImplementedError('initialization method [%s] is not implemented' % init_type)
             if hasattr(m, 'bias') and m.bias is not None:
@@ -132,7 +135,7 @@ def define_G(opt, gpu_ids):
             opt.z_dim, ngf=opt.ngf, output_nc=opt.output_nc, norm_layer=norm_layer
         )
     elif opt.netG == 'fc':
-        from models.networks import FCGenerator
+        from models.networks.fc import FCGenerator
         net = FCGenerator()
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % opt.netG)
@@ -153,7 +156,7 @@ def define_D(opt, gpu_ids=()):
         from models.networks.DCGAN_nets import DCGANDiscriminator
         net = DCGANDiscriminator(opt.ndf, opt.input_nc, norm_layer)
     elif opt.netG == 'fc':
-        from models.networks import FCDiscriminator
+        from models.networks.fc import FCDiscriminator
         net = FCDiscriminator()
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % net)

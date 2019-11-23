@@ -14,6 +14,7 @@ See our template dataset class 'template_dataset.py' for more details.
 import importlib
 import torch.utils.data
 from data.base_dataset import BaseDataset
+from util.util import get_user_attributes
 
 
 def find_dataset_using_name(dataset_name):
@@ -74,6 +75,9 @@ class CustomDatasetDataLoader:
         self.opt = opt
         dataset_class = find_dataset_using_name(opt.dataset_mode)
         self.dataset = dataset_class(opt)
+
+        for name, value in get_user_attributes(self.dataset):  # expose attribute of self.dataset
+            setattr(self, name, value)
         self.eval_size = opt.eval_size if opt.model == 'egan' else 0
         self.bs = opt.batch_size
 

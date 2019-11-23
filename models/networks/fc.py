@@ -6,7 +6,7 @@ class FCGenerator(nn.Module):
 
     def __init__(self, dim=300):
         super().__init__()
-        self.layer = nn.Linear(dim, dim)
+        self.layer = nn.Linear(dim, dim, bias=False)
 
     def forward(self, x: dict):
         x = x['source']

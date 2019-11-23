@@ -4,6 +4,7 @@ import torch
 import numpy as np
 from PIL import Image
 import os
+import inspect
 
 
 def tensor2im(input_image, imtype=np.uint8):
@@ -166,3 +167,12 @@ def visualize_imgs(images, N, fineSize, input_nc=3):
             blank_img[0, :, x:x + fineSize, y:y + fineSize] = img
 
     return blank_img
+
+
+def get_user_attributes(cls):
+    boring = dir(type('dummy', (object,), {}))
+    return [item
+            for item in inspect.getmembers(cls)
+            if item[0] not in boring]
+
+

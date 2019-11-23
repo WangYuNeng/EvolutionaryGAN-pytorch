@@ -18,14 +18,13 @@ from models import create_model
 from evaluators import get_evaluator
 
 
-
 if __name__ == '__main__':
     opt = TrainOptions().parse()  # get training options
+    model = create_model(opt)  # create a model given opt.model and other options
+    model.setup(opt)  # regular setup: load and print networks; create schedulers
     dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)  # get the number of images in the dataset.
     print('The number of training samples = %d' % dataset_size)
-    model = create_model(opt)  # create a model given opt.model and other options
-    model.setup(opt)  # regular setup: load and print networks; create schedulers
     evaluator = get_evaluator(opt, model=model, dataset=dataset)
     total_iters = 0  # the total number of training iterations
     epoch = 0
