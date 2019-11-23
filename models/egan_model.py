@@ -153,7 +153,7 @@ class EGANModel(BaseModel):
         self.loss_D.backward() 
 
     def optimize_parameters(self):
-        input_imgs, input_target = self.inputs['image'], self.inputs['target']
+        input_imgs, input_target = self.inputs['source'], self.inputs['target']
         for i in range(self.opt.D_iters + 1):
             self.real_imgs = input_imgs[i * self.opt.batch_size: (i+1) * self.opt.batch_size]
             if self.opt.cgan:
@@ -176,7 +176,7 @@ class EGANModel(BaseModel):
                 self.optimizer_D.step()
 
     def Evo_G(self):
-        input_imgs, input_target = self.inputs['image'], self.inputs['target']
+        input_imgs, input_target = self.inputs['source'], self.inputs['target']
         eval_imgs = input_imgs[-self.eval_size:]
         eval_targets = input_target[-self.eval_size:] if self.opt.cgan else None
 

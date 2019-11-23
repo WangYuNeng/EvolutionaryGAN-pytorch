@@ -99,7 +99,7 @@ class Hdf5Dataset(BaseDataset):
         img = Image.fromarray(img) 
         img = self.transform(img)
 
-        return {'image': img, 'target': label}
+        return {'source': img, 'target': label}
 
     def __len__(self):
         """Return the total number of images."""

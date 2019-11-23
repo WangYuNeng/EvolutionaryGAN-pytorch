@@ -74,7 +74,7 @@ class TorchvisionDataset(BaseDataset):
         img = item[0]
         label = item[1]
 
-        return {'image': img, 'target': label}
+        return {'source': img, 'target': label}
 
     def __len__(self):
         """Return the total number of images."""

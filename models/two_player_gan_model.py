@@ -134,7 +134,7 @@ class TwoPlayerGANModel(BaseModel):
         self.loss_D.backward()
 
     def optimize_parameters(self):
-        input_imgs, input_target = self.inputs['image'], self.inputs['target']
+        input_imgs, input_target = self.inputs['source'], self.inputs['target']
         for i in range(self.opt.D_iters + 1):
             real_imgs = input_imgs[i * self.opt.batch_size:(i + 1) * self.opt.batch_size]
             if self.opt.cgan:

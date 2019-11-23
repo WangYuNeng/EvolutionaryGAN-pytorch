@@ -144,7 +144,7 @@ def define_D(opt, gpu_ids=()):
     Returns a discriminator
     """
     net = None
-    norm_layer = get_norm_layer(norm_type=opt.norm)
+    norm_layer = get_norm_layer(norm_type=opt.d_norm)
 
     if opt.netD == 'DCGAN_cifar10':  # default PatchGAN classifier
         from networks.DCGAN_nets import DCGANDiscriminator_cifar10
