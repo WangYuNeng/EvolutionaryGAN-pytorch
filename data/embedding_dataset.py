@@ -23,15 +23,6 @@ class EmbeddingDataset(BaseDataset):
 
     @staticmethod
     def modify_commandline_options(parser, is_train):
-        """Add new dataset-specific options, and rewrite default values for existing options.
-
-        Parameters:
-            parser          -- original option parser
-            is_train (bool) -- whether training phase or test phase. You can use this flag to add training-specific or test-specific options.
-
-        Returns:
-            the modified parser.
-        """
         parser.add_argument('--download_root', type=str, default='./datasets/embedding',
                             help='root directory of dataset exist or will be saved')
         parser.add_argument('--source_dataset_name', type=str, default='cbow',
@@ -126,7 +117,7 @@ class EmbeddingDataset(BaseDataset):
 
         """
         target_index = (index + random.randint(0, self.__len__())) % self.__len__()
-        return {'source': self.source_vecs[index], 'target': self.target_vecs[target_index]}
+        return {'data': self.source_vecs[index], 'source': self.target_vecs[target_index]}
 
     def __len__(self):
         """Return the total number of word-vectors."""

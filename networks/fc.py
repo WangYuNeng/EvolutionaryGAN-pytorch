@@ -8,7 +8,8 @@ class FCGenerator(nn.Module):
         super().__init__()
         self.layer = nn.Linear(dim, dim)
 
-    def forward(self, x):
+    def forward(self, x: dict):
+        x = x['source']
         return self.layer(x)
 
 
@@ -25,7 +26,8 @@ class FCDiscriminator(nn.Module):
         ])
         self.out = nn.Linear(n_hidden, 1)
 
-    def forward(self, x):
+    def forward(self, x: dict):
+        x = x['data']
         for layer in self.layers:
             x = layer(x)
             x = torch.relu(x)

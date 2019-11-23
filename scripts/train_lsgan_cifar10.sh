@@ -6,7 +6,7 @@ python train.py --name lsgan_cifar10 \
        --download_root ./datasets/cifar10 --dataset_name CIFAR10 \
        --crop_size 32 --load_size 32 \
        --d_loss_mode lsgan --g_loss_mode lsgan --which_D S \
-       --netD DCGAN_cifar10 --netG DCGAN_cifar10 --ngf 128 --ndf 128 --g_norm none --d_norm batch \
+       --netD DCGAN --netG DCGAN --ngf 128 --ndf 128 --g_norm none --d_norm batch \
        --init_type normal --init_gain 0.02 \
        --no_dropout --no_flip \
        --D_iters 3 \

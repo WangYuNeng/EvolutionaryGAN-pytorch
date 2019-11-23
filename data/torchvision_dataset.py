@@ -12,25 +12,31 @@ You need to implement the following functions:
     -- <__len__>: Return the number of images.
 """
 from data.base_dataset import BaseDataset, get_transform
+
+
 # from data.image_folder import make_dataset
 # from PIL import Image
 
 class TorchvisionDataset(BaseDataset):
     """A template dataset class for you to implement custom datasets."""
+
     @staticmethod
     def modify_commandline_options(parser, is_train):
         """Add new dataset-specific options, and rewrite default values for existing options.
 
         Parameters:
             parser          -- original option parser
-            is_train (bool) -- whether training phase or test phase. You can use this flag to add training-specific or test-specific options.
+            is_train (bool) -- whether training phase or test phase.
+                You can use this flag to add training-specific or test-specific options.
 
         Returns:
             the modified parser.
         """
-        parser.add_argument('--download_root', type=str, default='./datasets', help='root directory of dataset exist or will be saved')
-        parser.add_argument('--dataset_name', type=str, default='CIFAR10', help='name of imported dataset. CIFAR10 | CIFAR100')
-        #parser.set_defaults(max_dataset_size=10, new_dataset_option=2.0)  # specify dataset-specific default values
+        parser.add_argument('--download_root', type=str, default='./datasets',
+                            help='root directory of dataset exist or will be saved')
+        parser.add_argument('--dataset_name', type=str, default='CIFAR10',
+                            help='name of imported dataset. CIFAR10 | CIFAR100')
+        # parser.set_defaults(max_dataset_size=10, new_dataset_option=2.0)  # specify dataset-specific default values
         return parser
 
     def __init__(self, opt):
@@ -46,9 +52,10 @@ class TorchvisionDataset(BaseDataset):
         """
         # save the option and dataset root
         BaseDataset.__init__(self, opt)
-        # define the default transform function. You can use <base_dataset.get_transform>; You can also define your custom transform function
+        # define the default transform function. You can use <base_dataset.get_transform>;
+        # You can also define your custom transform function
         self.transform = get_transform(opt)
-        
+
         # import torchvision dataset
         if opt.dataset_name == 'CIFAR10':
             from torchvision.datasets import CIFAR10 as torchvisionlib
@@ -57,9 +64,10 @@ class TorchvisionDataset(BaseDataset):
         else:
             raise ValueError('torchvision_dataset import fault.')
 
-        self.dataload = torchvisionlib(root = opt.download_root,
-                                       transform = self.transform,
-                                       download = True)
+        self.dataload = torchvisionlib(root=opt.download_root,
+                                       transform=self.transform,
+                                       download=True)
+
     def __getitem__(self, index):
         """Return a data point and its metadata information.
 
@@ -74,7 +82,7 @@ class TorchvisionDataset(BaseDataset):
         img = item[0]
         label = item[1]
 
-        return {'source': img, 'target': label}
+        return {'data': img, 'condition': label}
 
     def __len__(self):
         """Return the total number of images."""

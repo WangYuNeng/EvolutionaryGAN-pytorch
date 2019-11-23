@@ -53,6 +53,7 @@ class BaseModel(ABC):
         self.optimizers = []
         self.image_paths = []
         self.metric = 0  # used for learning rate policy 'plateau'
+        self.step = 0  # counter for training steps
 
         # visualize settings
         self.N = int(np.trunc(np.sqrt(min(opt.batch_size, 64))))

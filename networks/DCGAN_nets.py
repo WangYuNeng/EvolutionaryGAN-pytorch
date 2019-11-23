@@ -2,10 +2,10 @@ import torch.nn as nn
 import functools
 
 
-class DCGANGenerator_cifar10(nn.Module):
+class DCGANGenerator(nn.Module):
 
     def __init__(self, z_dim, ngf=64, output_nc=3, norm_layer=nn.BatchNorm2d):
-        super(DCGANGenerator_cifar10, self).__init__()
+        super(DCGANGenerator, self).__init__()
         self.z_dim = z_dim
         self.ngf = ngf
         if type(norm_layer) == functools.partial:  # no need to use bias as BatchNorm2d has affine parameters
@@ -31,12 +31,13 @@ class DCGANGenerator_cifar10(nn.Module):
         self.model = nn.Sequential(*seq)
 
     def forward(self, inp):
+        inp = inp['data']
         return self.model(inp.view(-1, self.z_dim, 1, 1))
 
 
-class DCGANDiscriminator_cifar10(nn.Module):
+class DCGANDiscriminator(nn.Module):
     def __init__(self, ndf=64, input_nc=3, norm_layer=nn.BatchNorm2d):
-        super(DCGANDiscriminator_cifar10, self).__init__()
+        super(DCGANDiscriminator, self).__init__()
 
         self.ndf = ndf
         if type(norm_layer) == functools.partial:  # no need to use bias as BatchNorm2d has affine parameters
@@ -62,6 +63,7 @@ class DCGANDiscriminator_cifar10(nn.Module):
         self.fc = nn.Sequential(*fc)
 
     def forward(self, inp):
+        inp = inp['data']
         x = self.cnn_model(inp)
         x = x.view(-1, 4 * 4 * self.ndf * 8)
         x = self.fc(x)

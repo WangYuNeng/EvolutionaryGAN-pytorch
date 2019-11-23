@@ -7,7 +7,7 @@ python train.py --name egan_cifar10 \
        --crop_size 32 --load_size 32 \
        --d_loss_mode vanilla --g_loss_mode nsgan vanilla lsgan --which_D S \
        --lambda_f 0.05 --candi_num 1 --z_type Uniform --z_dim 100 \
-       --netD DCGAN_cifar10 --netG DCGAN_cifar10 --ngf 128 --ndf 128 --g_norm none --d_norm batch \
+       --netD DCGAN --netG DCGAN --ngf 128 --ndf 128 --g_norm none --d_norm batch \
        --init_type normal --init_gain 0.02 \
        --no_dropout --no_flip \
        --D_iters 3 \

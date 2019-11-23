@@ -28,7 +28,7 @@ def get_norm_layer(norm_type='instance'):
     elif norm_type == 'instance':
         norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
     elif norm_type == 'none':
-        norm_layer = lambda x: Identity()
+        norm_layer = Identity
     else:
         raise NotImplementedError('normalization layer [%s] is not found' % norm_type)
     return norm_layer
@@ -126,9 +126,9 @@ def define_G(opt, gpu_ids):
     """
     norm_layer = get_norm_layer(norm_type=opt.g_norm)
 
-    if opt.netG == 'DCGAN_cifar10':
-        from networks.DCGAN_nets import DCGANGenerator_cifar10
-        net = DCGANGenerator_cifar10(
+    if opt.netG == 'DCGAN':
+        from networks.DCGAN_nets import DCGANGenerator
+        net = DCGANGenerator(
             opt.z_dim, ngf=opt.ngf, output_nc=opt.output_nc, norm_layer=norm_layer
         )
     elif opt.netG == 'fc':
@@ -149,9 +149,9 @@ def define_D(opt, gpu_ids=()):
     net = None
     norm_layer = get_norm_layer(norm_type=opt.d_norm)
 
-    if opt.netD == 'DCGAN_cifar10':  # default PatchGAN classifier
-        from networks.DCGAN_nets import DCGANDiscriminator_cifar10
-        net = DCGANDiscriminator_cifar10(opt.ndf, opt.input_nc, norm_layer)
+    if opt.netD == 'DCGAN':  # default PatchGAN classifier
+        from networks.DCGAN_nets import DCGANDiscriminator
+        net = DCGANDiscriminator(opt.ndf, opt.input_nc, norm_layer)
     elif opt.netG == 'fc':
         from networks.fc import FCDiscriminator
         net = FCDiscriminator()
@@ -166,7 +166,8 @@ def define_D(opt, gpu_ids=()):
 class ResnetGenerator(nn.Module):
     """Resnet-based generator that consists of Resnet blocks between a few downsampling/upsampling operations.
 
-    We adapt Torch code and idea from Justin Johnson's neural style transfer project(https://github.com/jcjohnson/fast-neural-style)
+    We adapt Torch code and idea from Justin Johnson's neural style transfer project
+    (https://github.com/jcjohnson/fast-neural-style)
     """
 
     def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6,

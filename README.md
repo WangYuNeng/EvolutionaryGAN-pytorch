@@ -74,7 +74,7 @@ This code borrows heavily from [pytorch-CycleGAN-and-pix2pix](https://github.com
 
 ### Network architecture
 
-- DCGAN-based networks architecture: [./models/DCGAN_nets.py](https://github.com/WANG-Chaoyue/EvolutionaryGAN-pytorch/blob/master/models/DCGAN_nets.py) `--netD DCGAN_cifar10 --netG DCGAN_cifar10`
+- DCGAN-based networks architecture: [./models/DCGAN_nets.py](https://github.com/WANG-Chaoyue/EvolutionaryGAN-pytorch/blob/master/models/DCGAN_nets.py) `--netD DCGAN --netG DCGAN`
 
 More architectures will be added.
 
