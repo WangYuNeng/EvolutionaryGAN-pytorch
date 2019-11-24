@@ -1,31 +1,29 @@
 import os
 import subprocess
 import random
+from joblib import Parallel, delayed
 
 import numpy as np
+from tqdm import tqdm
 
 from data.base_dataset import BaseDataset
 
 
 class EmbeddingDataset(BaseDataset):
-    """A template dataset class for you to implement custom datasets."""
-
+    """
+    pretrained word embedding are at
+    https://drive.google.com/drive/folders/1CuI62zaN1TUc-JZA_MEVAQngP7fJR89c
+    """
     download_urls = {
-        '0to0.1.cbow.vec': 'https://drive.google.com/open?id=1-C3Nq9nXBzBsPI570IXkl81UlcBE-JYn',
-        '0to0.1.skipgram.vec': 'https://drive.google.com/open?id=1-SPp0fIoGhHtbV4Z73bHrKIje-hUzD2D',
+        '0to0.1.cbow.vec': 'https://drive.google.com/open?id=1rjsPNhAovS5Sx9AocUiEJsjzyPXdov4g',
+        '0.1to0.2.cbow.vec': 'https://drive.google.com/open?id=1jVp8Jtqg5l03TokHEY1Mn91zb549Xy8V',
+        '0to0.1.skipgram.vec': 'https://drive.google.com/open?id=1xNJC-l_iQuL9CVotfaA25sKXESpV1U6O',
+        '0.1to0.2.skipgram.vec': 'https://drive.google.com/open?id=1RGMshfU03ZTLFPf_qqxlYAsGP18m2Nhw',
+        '0to0.1.glove.vec': '',
     }
 
     @staticmethod
     def modify_commandline_options(parser, is_train):
-        """Add new dataset-specific options, and rewrite default values for existing options.
-
-        Parameters:
-            parser          -- original option parser
-            is_train (bool) -- whether training phase or test phase. You can use this flag to add training-specific or test-specific options.
-
-        Returns:
-            the modified parser.
-        """
         parser.add_argument('--download_root', type=str, default='./datasets/embedding',
                             help='root directory of dataset exist or will be saved')
         parser.add_argument('--source_dataset_name', type=str, default='cbow',
@@ -88,18 +86,33 @@ class EmbeddingDataset(BaseDataset):
         )
 
     def load_embeddings(self, url_name: str):
+        print(f'Loading {url_name}...')
         file_path = os.path.join(self.data_root, url_name)
-        words = []
-        vecs = []
         with open(file_path, 'r') as f:
-            for line in f:
-                fields = line.strip().split()
-                words.append(fields[0])
-                vecs.append([float(v) for v in fields[1:]])
-        vecs = np.asarray(vecs)
+            vocab_size, emb_dim = [int(i) for i in f.readline().split()]
+            embedding_index = dict(
+                Parallel(n_jobs=-1)(
+                    delayed(self.load_line_from_file)(line) for line in tqdm(f)
+                )
+            )
+        words = embedding_index.keys()
+        vecs = np.asarray(list(embedding_index.values()))
+        vecs = (vecs - np.mean(vecs, axis=1, keepdims=True)) / np.std(vecs, axis=1, keepdims=True)  # normalize
         word2idx = {w: i for i, w in enumerate(words)}
         idx2word = {i: w for i, w in enumerate(words)}
+        if not len(words) == vocab_size or not vecs.shape[1] == emb_dim:
+            raise ValueError(
+                f'corrupted embedding {file_path},'
+                f'vecs.shape = {vecs.shape}'
+            )
         return vecs, word2idx, idx2word
+
+    @staticmethod
+    def load_line_from_file(line):
+        values = line.rstrip().rsplit(' ')
+        word = values[0]
+        coefs = np.asarray(values[1:], dtype='float32')
+        return word, coefs
 
     def __getitem__(self, index):
         """Return a data point and its metadata information.
@@ -111,8 +124,8 @@ class EmbeddingDataset(BaseDataset):
             a dictionary of data with their names. It usually contains the data itself and its metadata information.
 
         """
-        target_index = (index + np.random.random(0, self.__len__())) % self.__len__()
-        return {'source': self.source_vecs[index], 'target': self.target_vecs[target_index]}
+        target_index = (index + random.randint(0, self.__len__())) % self.__len__()
+        return {'data': self.target_vecs[target_index], 'source': self.source_vecs[index], 'source_idx': index}
 
     def __len__(self):
         """Return the total number of word-vectors."""

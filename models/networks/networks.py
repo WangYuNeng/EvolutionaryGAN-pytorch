@@ -4,6 +4,7 @@ from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
 
+
 ###############################################################################
 # Helper Functions
 ###############################################################################
@@ -11,6 +12,7 @@ from torch.optim import lr_scheduler
 class Identity(nn.Module):
     def forward(self, x):
         return x
+
 
 def get_norm_layer(norm_type='instance'):
     """Return a normalization layer
@@ -26,7 +28,7 @@ def get_norm_layer(norm_type='instance'):
     elif norm_type == 'instance':
         norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
     elif norm_type == 'none':
-        norm_layer = lambda x: Identity() 
+        norm_layer = Identity
     else:
         raise NotImplementedError('normalization layer [%s] is not found' % norm_type)
     return norm_layer
@@ -49,6 +51,7 @@ def get_scheduler(optimizer, opt):
         def lambda_rule(epoch):
             lr_l = 1.0 - max(0, epoch + opt.epoch_count - opt.niter) / float(opt.niter_decay + 1)
             return lr_l
+
         scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
     elif opt.lr_policy == 'step':
         scheduler = lr_scheduler.StepLR(optimizer, step_size=opt.lr_decay_iters, gamma=0.1)
@@ -72,6 +75,7 @@ def init_weights(net, init_type='normal', init_gain=0.02):
     We use 'normal' in the original pix2pix and CycleGAN paper. But xavier and kaiming might
     work better for some applications. Feel free to try yourself.
     """
+
     def init_func(m):  # define the initialization function
         classname = m.__class__.__name__
         if hasattr(m, 'weight') and (classname.find('Conv') != -1 or classname.find('Linear') != -1):
@@ -83,11 +87,15 @@ def init_weights(net, init_type='normal', init_gain=0.02):
                 init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
             elif init_type == 'orthogonal':
                 init.orthogonal_(m.weight.data, gain=init_gain)
+            elif init_type == 'diagonal':
+                if m.weight.shape[0] == m.weight.shape[1]:
+                    m.weight.data.copy_(torch.diag(torch.ones(m.weight.shape[0])))
             else:
                 raise NotImplementedError('initialization method [%s] is not implemented' % init_type)
             if hasattr(m, 'bias') and m.bias is not None:
                 init.constant_(m.bias.data, 0.0)
-        elif classname.find('BatchNorm2d') != -1:  # BatchNorm Layer's weight is not a matrix; only normal distribution applies.
+        elif classname.find(
+                'BatchNorm2d') != -1:  # BatchNorm Layer's weight is not a matrix; only normal distribution applies.
             init.normal_(m.weight.data, 1.0, init_gain)
             init.constant_(m.bias.data, 0.0)
 
@@ -95,7 +103,7 @@ def init_weights(net, init_type='normal', init_gain=0.02):
     net.apply(init_func)  # apply the initialization function <init_func>
 
 
-def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
+def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=()):
     """Initialize a network: 1. register CPU/GPU device (with multi-GPU support); 2. initialize the network weights
     Parameters:
         net (network)      -- the network to be initialized
@@ -106,241 +114,67 @@ def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
     Return an initialized network.
     """
     if len(gpu_ids) > 0:
-        assert(torch.cuda.is_available())
+        assert (torch.cuda.is_available())
         net.to(gpu_ids[0])
         net = torch.nn.DataParallel(net, gpu_ids)  # multi-GPUs
     init_weights(net, init_type, init_gain=init_gain)
     return net
 
 
-def define_G(z_dim, output_nc, ngf, netG, norm='batch', cgan=False, c_dim=None, use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[]):
+def define_G(opt, gpu_ids):
     """Create a generator
     Parameters:
-        input_nc (int) -- the number of channels in input images
-        output_nc (int) -- the number of channels in output images
-        ngf (int) -- the number of filters in the last conv layer
-        netG (str) -- the architecture's name: resnet_9blocks | resnet_6blocks | unet_256 | unet_128
-        norm (str) -- the name of normalization layers used in the network: batch | instance | none
-        use_dropout (bool) -- if use dropout layers.
-        init_type (str)    -- the name of our initialization method.
-        init_gain (float)  -- scaling factor for normal, xavier and orthogonal.
         gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
     Returns a generator
     """
-    net = None
-    norm_layer = get_norm_layer(norm_type=norm)
+    norm_layer = get_norm_layer(norm_type=opt.g_norm)
 
-    if netG == 'DCGAN_cifar10':
-        from models.DCGAN_nets import DCGANGenerator_cifar10
-        net = DCGANGenerator_cifar10(z_dim, ngf=ngf, output_nc=output_nc,  norm_layer=norm_layer)
-        #net = DCGANGenerator_cifar10(z_dim, ngf=ngf, output_nc=output_nc,  norm_layer=norm_layer)
+    if opt.netG == 'DCGAN':
+        from models.networks.DCGAN_nets import DCGANGenerator
+        net = DCGANGenerator(
+            opt.z_dim, ngf=opt.ngf, output_nc=opt.output_nc, norm_layer=norm_layer
+        )
+    elif opt.netG == 'fc':
+        from models.networks.fc import FCGenerator
+        net = FCGenerator()
     else:
-        raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
-    return init_net(net, init_type, init_gain, gpu_ids)
+        raise NotImplementedError('Generator model name [%s] is not recognized' % opt.netG)
+    return init_net(net, opt.init_type, opt.init_gain, gpu_ids)
 
-def define_D(input_nc, ndf, netD, norm='batch', cgan=False, c_dim=None, init_type='normal', init_gain=0.02, gpu_ids=[]):
+
+def define_D(opt, gpu_ids=()):
     """Create a discriminator
     Parameters:
-        input_nc (int)     -- the number of channels in input images
-        ndf (int)          -- the number of filters in the first conv layer
-        netD (str)         -- the architecture's name: basic | n_layers | pixel
-        n_layers_D (int)   -- the number of conv layers in the discriminator; effective when netD=='n_layers'
-        norm (str)         -- the type of normalization layers used in the network.
-        init_type (str)    -- the name of the initialization method.
-        init_gain (float)  -- scaling factor for normal, xavier and orthogonal.
         gpu_ids (int list) -- which GPUs the network runs on: e.g., 0,1,2
 
     Returns a discriminator
     """
     net = None
-    norm_layer = get_norm_layer(norm_type=norm)
+    norm_layer = get_norm_layer(norm_type=opt.d_norm)
 
-    if netD == 'DCGAN_cifar10':  # default PatchGAN classifier
-        from models.DCGAN_nets import DCGANDiscriminator_cifar10
-        net = DCGANDiscriminator_cifar10(ndf, input_nc,  norm_layer)
-        #net = DCGANDiscriminator_cifar10(ndf, input_nc,  norm_layer)
+    if opt.netD == 'DCGAN':  # default PatchGAN classifier
+        from models.networks.DCGAN_nets import DCGANDiscriminator
+        net = DCGANDiscriminator(opt.ndf, opt.input_nc, norm_layer)
+    elif opt.netG == 'fc':
+        from models.networks.fc import FCDiscriminator
+        net = FCDiscriminator()
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % net)
-    return init_net(net, init_type, init_gain, gpu_ids)
+    return init_net(net, opt.init_type, opt.init_gain, gpu_ids)
+
 
 ##############################################################################
 # Classes
 ##############################################################################
-class GANLoss(nn.Module):
-    """Define different GAN Discriminator's objectives.
-
-    The GANLoss class abstracts away the need to create the target label tensor
-    that has the same size as the input.
-    """
-
-    def __init__(self, loss_mode, which_net, which_D, target_real_label=1.0, target_fake_label=0.0):
-        """ Initialize the GAN's Discriminator Loss class.
-
-        Parameters:
-            loss_mode (str) - - the type of GAN objective. It currently supports vanilla, lsgan, and wgangp.
-            target_real_label (bool) - - label for a real image
-            target_fake_label (bool) - - label of a fake image
-
-        Note: Do not use sigmoid as the last layer of Discriminator.
-        LSGAN needs no sigmoid. vanilla GANs will handle it with BCEWithLogitsLoss.
-        """
-        super(GANLoss, self).__init__()
-        self.register_buffer('real_label', torch.tensor(target_real_label))
-        self.register_buffer('fake_label', torch.tensor(target_fake_label))
-        self.loss_mode = loss_mode
-        self.which_net = which_net 
-        self.which_D = which_D 
-
-        if loss_mode == 'lsgan':
-            self.loss = nn.MSELoss()
-        elif loss_mode in ['vanilla', 'nsgan', 'rsgan']:
-            self.loss = nn.BCEWithLogitsLoss()
-        elif loss_mode in ['wgan', 'hinge']:
-            self.loss = None
-        else:
-            raise NotImplementedError('gan mode %s not implemented' % loss_mode)
-
-    def get_target_tensor(self, prediction, target_is_real):
-        """Create label tensors with the same size as the input.
-        Parameters:
-            prediction (tensor) - - tpyically the prediction from a discriminator
-            target_is_real (bool) - - if the ground truth label is for real images or fake images
-        Returns:
-            A label tensor filled with ground truth label, and with the size of the input
-        """
-        if target_is_real:
-            target_tensor = self.real_label
-        else:
-            target_tensor = self.fake_label
-        return target_tensor.expand_as(prediction)
-
-    def G_loss(self, Dfake, Dreal):
-        real_tensor = self.get_target_tensor(Dreal, True)
-        fake_tensor = self.get_target_tensor(Dreal, False)
-
-        if self.which_D == 'S':
-            prediction_fake = Dfake
-            prediction_real = real_tensor if self.loss_mode in ['vanilla'] else fake_tensor
-        elif self.which_D == 'Ra':
-            prediction_fake = Dfake - torch.mean(Dreal)
-            prediction_real = Dreal - torch.mean(Dfake)
-        else:
-            raise NotImplementedError('which_D name [%s] is not recognized' % self.which_D)
-
-        if self.loss_mode in ['lsgan', 'nsgan']:
-            loss_fake = self.loss(prediction_fake, real_tensor)
-            loss_real = self.loss(prediction_real, fake_tensor)
-        elif self.loss_mode == 'vanilla':
-            loss_fake = -self.loss(prediction_fake, fake_tensor)
-            loss_real = -self.loss(prediction_real, real_tensor)
-        elif self.loss_mode in ['wgan', 'hinge'] and self.which_D == 'S':
-            loss_fake = -prediction_fake.mean()
-            loss_real =  prediction_real.mean()
-        elif self.loss_mode == 'hinge' and self.which_D == 'Ra':
-            loss_fake = nn.ReLU()(1.0 - prediction_fake).mean()
-            loss_real = nn.ReLU()(1.0 + prediction_real).mean()
-        elif self.loss_mode == 'rsgan':
-            loss_fake = self.loss(Dfake - Dreal, real_tensor)
-            loss_real = 0. 
-        else:
-            raise NotImplementedError('loss_mode name [%s] is not recognized' % self.loss_mode)
-
-        return loss_fake, loss_real
-
-    def D_loss(self, Dfake, Dreal):
-        real_tensor = self.get_target_tensor(Dreal, True)
-        fake_tensor = self.get_target_tensor(Dreal, False)
-
-        if self.which_D == 'S':
-            prediction_fake = Dfake
-            prediction_real = Dreal 
-        elif self.which_D == 'Ra':
-            prediction_fake = Dfake - torch.mean(Dreal)
-            prediction_real = Dreal - torch.mean(Dfake)
-        else:
-            raise NotImplementedError('which_D name [%s] is not recognized' % self.which_D)
-
-        if self.loss_mode in ['lsgan', 'nsgan', 'vanilla']:
-            loss_fake = self.loss(prediction_fake, fake_tensor)
-            loss_real = self.loss(prediction_real, real_tensor)
-        elif self.loss_mode == 'wgan':
-            loss_fake =  prediction_fake.mean()
-            loss_real = -prediction_real.mean()
-        elif self.loss_mode == 'hinge':
-            loss_fake = nn.ReLU()(1.0 + prediction_fake).mean()
-            loss_real = nn.ReLU()(1.0 - prediction_real).mean()
-        elif self.loss_mode == 'rsgan':
-            loss_fake = 0. 
-            loss_real = self.loss(Dreal - Dfake, real_tensor)
-        else:
-            raise NotImplementedError('loss_mode name [%s] is not recognized' % self.loss_mode)
-
-        return loss_fake, loss_real
-
-    def __call__(self, Dfake, Dreal):
-        """Calculate loss given Discriminator's output and grount truth labels.
-        Parameters:
-            prediction (tensor) - - tpyically the prediction output from a discriminator
-            target_is_real (bool) - - if the ground truth label is for real images or fake images
-        Returns:
-            the calculated loss.
-        """
-        if self.which_net == 'G':
-            loss_fake, loss_real = self.G_loss(Dfake, Dreal) 
-            return loss_fake, loss_real
-        elif self.which_net == 'D':
-            loss_fake, loss_real = self.D_loss(Dfake, Dreal) 
-            return loss_fake, loss_real
-        else:
-            raise NotImplementedError('which_net name [%s] is not recognized' % self.which_net)
-
-
-
-def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', constant=1.0, lambda_gp=10.0):
-    """Calculate the gradient penalty loss, used in WGAN-GP paper https://arxiv.org/abs/1704.00028
-
-    Arguments:
-        netD (network)              -- discriminator network
-        real_data (tensor array)    -- real images
-        fake_data (tensor array)    -- generated images from the generator
-        device (str)                -- GPU / CPU: from torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device('cpu')
-        type (str)                  -- if we mix real and fake data or not [real | fake | mixed].
-        constant (float)            -- the constant used in formula ( | |gradient||_2 - constant)^2
-        lambda_gp (float)           -- weight for this loss
-
-    Returns the gradient penalty loss
-    """
-    if lambda_gp > 0.0:
-        if type == 'real':   # either use real images, fake images, or a linear interpolation of two.
-            interpolatesv = real_data
-        elif type == 'fake':
-            interpolatesv = fake_data
-        elif type == 'mixed':
-            alpha = torch.rand(real_data.shape[0], 1)
-            alpha = alpha.expand(real_data.shape[0], real_data.nelement() // real_data.shape[0]).contiguous().view(*real_data.shape)
-            alpha = alpha.to(device)
-            interpolatesv = alpha * real_data + ((1 - alpha) * fake_data)
-        else:
-            raise NotImplementedError('{} not implemented'.format(type))
-        interpolatesv.requires_grad_(True)
-        disc_interpolates = netD(interpolatesv)
-        gradients = torch.autograd.grad(outputs=disc_interpolates, inputs=interpolatesv,
-                                        grad_outputs=torch.ones(disc_interpolates.size()).to(device),
-                                        create_graph=True, retain_graph=True, only_inputs=True)
-        gradients = gradients[0].view(real_data.size(0), -1)  # flat the data
-        gradient_penalty = (((gradients + 1e-16).norm(2, dim=1) - constant) ** 2).mean() * lambda_gp        # added eps
-        return gradient_penalty, gradients
-    else:
-        return 0.0, None
-
-
 class ResnetGenerator(nn.Module):
     """Resnet-based generator that consists of Resnet blocks between a few downsampling/upsampling operations.
 
-    We adapt Torch code and idea from Justin Johnson's neural style transfer project(https://github.com/jcjohnson/fast-neural-style)
+    We adapt Torch code and idea from Justin Johnson's neural style transfer project
+    (https://github.com/jcjohnson/fast-neural-style)
     """
 
-    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6, padding_type='reflect'):
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6,
+                 padding_type='reflect'):
         """Construct a Resnet-based generator
 
         Parameters:
@@ -352,7 +186,7 @@ class ResnetGenerator(nn.Module):
             n_blocks (int)      -- the number of ResNet blocks
             padding_type (str)  -- the name of padding layer in conv layers: reflect | replicate | zero
         """
-        assert(n_blocks >= 0)
+        assert (n_blocks >= 0)
         super(ResnetGenerator, self).__init__()
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
@@ -372,9 +206,10 @@ class ResnetGenerator(nn.Module):
                       nn.ReLU(True)]
 
         mult = 2 ** n_downsampling
-        for i in range(n_blocks):       # add ResNet blocks
+        for i in range(n_blocks):  # add ResNet blocks
 
-            model += [ResnetBlock(ngf * mult, padding_type=padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias)]
+            model += [ResnetBlock(ngf * mult, padding_type=padding_type, norm_layer=norm_layer, use_dropout=use_dropout,
+                                  use_bias=use_bias)]
 
         for i in range(n_downsampling):  # add upsampling layers
             mult = 2 ** (n_downsampling - i)
@@ -473,14 +308,19 @@ class UnetGenerator(nn.Module):
         """
         super(UnetGenerator, self).__init__()
         # construct unet structure
-        unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=None, norm_layer=norm_layer, innermost=True)  # add the innermost layer
-        for i in range(num_downs - 5):          # add intermediate layers with ngf * 8 filters
-            unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, use_dropout=use_dropout)
+        unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=None, norm_layer=norm_layer,
+                                             innermost=True)  # add the innermost layer
+        for i in range(num_downs - 5):  # add intermediate layers with ngf * 8 filters
+            unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=unet_block,
+                                                 norm_layer=norm_layer, use_dropout=use_dropout)
         # gradually reduce the number of filters from ngf * 8 to ngf
-        unet_block = UnetSkipConnectionBlock(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
-        unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
+        unet_block = UnetSkipConnectionBlock(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block,
+                                             norm_layer=norm_layer)
+        unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block,
+                                             norm_layer=norm_layer)
         unet_block = UnetSkipConnectionBlock(ngf, ngf * 2, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
-        self.model = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True, norm_layer=norm_layer)  # add the outermost layer
+        self.model = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True,
+                                             norm_layer=norm_layer)  # add the outermost layer
 
     def forward(self, input):
         """Standard forward"""
@@ -553,7 +393,7 @@ class UnetSkipConnectionBlock(nn.Module):
     def forward(self, x):
         if self.outermost:
             return self.model(x)
-        else:   # add skip connections
+        else:  # add skip connections
             return torch.cat([x, self.model(x)], 1)
 
 
@@ -597,7 +437,8 @@ class NLayerDiscriminator(nn.Module):
             nn.LeakyReLU(0.2, True)
         ]
 
-        sequence += [nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]  # output 1 channel prediction map
+        sequence += [
+            nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]  # output 1 channel prediction map
         self.model = nn.Sequential(*sequence)
 
     def forward(self, input):

@@ -30,7 +30,7 @@ git clone https://github.com/WANG-Chaoyue/EvolutionaryGAN-pytorch.git
 cd EvolutionaryGAN-pytorch
 ```
 
-- Install [PyTorch](https://pytorch.org/get-started/locally/) and other dependencies [requirements.txt](https://github.com/WANG-Chaoyue/EvolutionaryGAN-pytorch/blob/master/requirements.txt) (e.g., torchvision, [visdom](https://github.com/facebookresearch/visdom) and [dominate](https://github.com/Knio/dominate)).
+- Install [PyTorch](https://pytorch.org/get-started/locally/) and other dependencies [requirements.txt](https://github.com/WANG-Chaoyue/EvolutionaryGAN-pytorch/blob/master/requirements.txt) (e.g., torchvision) and [dominate](https://github.com/Knio/dominate)).
 
 - Preparing *.npz* files for Pytorch Inception metrics evaluation (cifar10 as an example):
 ```
@@ -74,7 +74,7 @@ This code borrows heavily from [pytorch-CycleGAN-and-pix2pix](https://github.com
 
 ### Network architecture
 
-- DCGAN-based networks architecture: [./models/DCGAN_nets.py](https://github.com/WANG-Chaoyue/EvolutionaryGAN-pytorch/blob/master/models/DCGAN_nets.py) `--netD DCGAN_cifar10 --netG DCGAN_cifar10`
+- DCGAN-based networks architecture: [./models/DCGAN_nets.py](https://github.com/WANG-Chaoyue/EvolutionaryGAN-pytorch/blob/master/models/DCGAN_nets.py) `--netD DCGAN --netG DCGAN`
 
 More architectures will be added.
 

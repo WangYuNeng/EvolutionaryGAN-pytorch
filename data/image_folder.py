@@ -1,6 +1,7 @@
 """A modified image folder class
 
-We modify the official PyTorch image folder (https://github.com/pytorch/vision/blob/master/torchvision/datasets/folder.py)
+We modify the official PyTorch image folder
+(https://github.com/pytorch/vision/blob/master/torchvision/datasets/folder.py)
 so that this class can load images from both current directory and its subdirectories.
 """
 
@@ -42,9 +43,10 @@ class ImageFolder(data.Dataset):
                  loader=default_loader):
         imgs = make_dataset(root)
         if len(imgs) == 0:
-            raise(RuntimeError("Found 0 images in: " + root + "\n"
-                               "Supported image extensions are: " +
-                               ",".join(IMG_EXTENSIONS)))
+            raise(RuntimeError(
+                f"Found 0 images in: {root}\n"
+                f"Supported image extensions are: {','.join(IMG_EXTENSIONS)}"
+            ))
 
         self.root = root
         self.imgs = imgs
