@@ -19,7 +19,8 @@ class EmbeddingDataset(BaseDataset):
         '0.1to0.2.cbow.vec': 'https://drive.google.com/open?id=1jVp8Jtqg5l03TokHEY1Mn91zb549Xy8V',
         '0to0.1.skipgram.vec': 'https://drive.google.com/open?id=1xNJC-l_iQuL9CVotfaA25sKXESpV1U6O',
         '0.1to0.2.skipgram.vec': 'https://drive.google.com/open?id=1RGMshfU03ZTLFPf_qqxlYAsGP18m2Nhw',
-        '0to0.1.glove.vec': '',
+        '0to0.1.glove.vec': 'https://drive.google.com/open?id=1atZnVBUqaN9zOfTpilTbV0QCmS8mbYKF',
+        '0.1to0.2.glove.vec': 'https://drive.google.com/open?id=1Hl-OiRB6M8XfsQW2sd9UOZPTk_1DbSNc',
     }
 
     @staticmethod
