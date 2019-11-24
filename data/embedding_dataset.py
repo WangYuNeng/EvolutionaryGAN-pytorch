@@ -130,6 +130,4 @@ class EmbeddingDataset(BaseDataset):
 
     def __len__(self):
         """Return the total number of word-vectors."""
-        if len(self.source_vecs) != len(self.target_vecs):
-            raise ValueError(f"Incompatible vocab sizes {len(self.source_vecs)}, {len(self.target_vecs)}")
-        return len(self.source_vecs)
+        return len(self.target_vecs)

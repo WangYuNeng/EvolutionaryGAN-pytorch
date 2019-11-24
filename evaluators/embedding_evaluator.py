@@ -37,16 +37,12 @@ class EmbeddingEvaluator(BaseEvaluator):
         evaluate on the received training data directly
         """
         inp = self.model.inputs['source_idx']
-        predict_size = min(len(inp), self.max_eval_size)
-        inp = inp[:predict_size]
         source_words = [self.source_idx2word[idx.item()] for idx in inp]
-        target_idx = np.array(
-            [self.target_word2idx[word] for word in source_words],
-            dtype=int,
-        )
         predicted_embedding = self.model.get_output()
-        predicted_embedding = predicted_embedding[:predict_size]
         predicted_embedding = predicted_embedding.cpu()
+        target_idx, predicted_embedding = self._filter_mismatched_vocab(
+            source_words, predicted_embedding,
+        )
 
         target_embedding = self.dataset.target_vecs  # shape: (V, E)
         target_embedding = torch.from_numpy(target_embedding)
@@ -54,8 +50,6 @@ class EmbeddingEvaluator(BaseEvaluator):
         top_k_distance, top_k_idx = torch.topk(distance, k=self.k, largest=False, dim=-1)
         # top_k_idx.shape: (N, k)
 
-        target_idx = torch.from_numpy(target_idx).to(device=predicted_embedding.device)
-        target_idx = target_idx.unsqueeze(1)
         precisions = {
             f'P@{k}': (top_k_idx[:, :k] == target_idx).float().sum(-1).mean().item()
             for k in range(1, self.k + 1)
@@ -70,6 +64,21 @@ class EmbeddingEvaluator(BaseEvaluator):
             'mean_min_distance': mean_min_distance,
             'mean_max_distance': mean_max_distance,
         }
+
+    def _filter_mismatched_vocab(self, source_words: List[str], predicted_embedding: torch.Tensor):
+        indices, target_idx = [], []
+        for i, word in enumerate(source_words):
+            if word in self.target_word2idx:
+                indices.append(i)
+                target_idx.append(self.target_word2idx[word])
+        target_idx = np.array(target_idx, dtype=int)
+        target_idx = torch.from_numpy(target_idx).to(device=predicted_embedding.device)
+        target_idx = target_idx.unsqueeze(1)
+        predicted_embedding = predicted_embedding.index_select(
+            dim=0,
+            index=torch.Tensor(indices).long(),
+        )
+        return target_idx, predicted_embedding
 
     def _get_muse_scores(self, language='en'):
         if self.muse_source is None:
