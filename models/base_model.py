@@ -68,6 +68,13 @@ class BaseModel(ABC):
         }
 
     @abstractmethod
+    def forward(self):
+        """
+        generate samples based on previously set_input data
+        """
+        pass
+
+    @abstractmethod
     def get_output(self):
         pass
 
@@ -98,10 +105,6 @@ class BaseModel(ABC):
             if isinstance(name, str):
                 net = getattr(self, 'net' + name)
                 net.eval()
-
-    def get_image_paths(self):
-        """ Return image paths that are used to load current data"""
-        return self.image_paths
 
     def update_learning_rate(self):
         """Update learning rates for all the networks; called at the end of every epoch"""
