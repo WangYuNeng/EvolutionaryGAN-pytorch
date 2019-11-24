@@ -24,7 +24,8 @@ class TorchvisionDataset(BaseDataset):
 
         Parameters:
             parser          -- original option parser
-            is_train (bool) -- whether training phase or test phase. You can use this flag to add training-specific or test-specific options.
+            is_train (bool) -- whether training phase or test phase.
+                You can use this flag to add training-specific or test-specific options.
 
         Returns:
             the modified parser.
@@ -47,8 +48,12 @@ class TorchvisionDataset(BaseDataset):
         # save the option and dataset root
         BaseDataset.__init__(self, opt)
         # get the image paths of your dataset;
-        self.image_paths = []  # You can call sorted(make_dataset(self.root, opt.max_dataset_size)) to get all the image paths under the directory self.root
-        # define the default transform function. You can use <base_dataset.get_transform>; You can also define your custom transform function
+        self.image_paths = []
+        # You can call sorted(make_dataset(self.root, opt.max_dataset_size))
+        # to get all the image paths under the directory self.root
+
+        # define the default transform function. You can use <base_dataset.get_transform>;
+        # You can also define your custom transform function
         self.transform = get_transform(opt)
 
     def __getitem__(self, index):
@@ -62,7 +67,8 @@ class TorchvisionDataset(BaseDataset):
 
         Step 1: get a random image path: e.g., path = self.image_paths[index]
         Step 2: load your data from the disk: e.g., image = Image.open(path).convert('RGB').
-        Step 3: convert your data to a PyTorch tensor. You can use helpder functions such as self.transform. e.g., data = self.transform(image)
+        Step 3: convert your data to a PyTorch tensor.
+            You can use helper functions such as self.transform. e.g., data = self.transform(image)
         Step 4: return a data point as a dictionary.
         """
         path = 'temp'    # needs to be a string

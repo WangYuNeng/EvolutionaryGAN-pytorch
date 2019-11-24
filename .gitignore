@@ -8,7 +8,7 @@ results/
 build/
 dist/
 inception_v3/
-TTUR/stats/
+evaluators/TTUR/stats/
 *.png
 torch.egg-info/
 */**/__pycache__
@@ -49,3 +49,5 @@ test/data/legacy_serialized.pt
 
 embedding/train_embedding/data/*
 embedding/train_embedding/result/*
+monolingual/
+crosslingual
