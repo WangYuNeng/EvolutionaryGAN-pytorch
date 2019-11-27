@@ -5,8 +5,13 @@ from joblib import Parallel, delayed
 
 import numpy as np
 from tqdm import tqdm
+from dotenv import load_dotenv
 
 from data.base_dataset import BaseDataset
+
+
+load_dotenv('./.env')
+DATA_ROOT = os.environ.get('EMBEDDING_PATH')
 
 
 class EmbeddingDataset(BaseDataset):
@@ -25,8 +30,6 @@ class EmbeddingDataset(BaseDataset):
 
     @staticmethod
     def modify_commandline_options(parser, is_train):
-        parser.add_argument('--download_root', type=str, default='./datasets/embedding',
-                            help='root directory of dataset exist or will be saved')
         parser.add_argument('--source_dataset_name', type=str, default='cbow',
                             help='name of imported dataset, options: [cbow, fasttext]')
         parser.add_argument('--target_dataset_name', type=str, default='cbow',
@@ -46,7 +49,7 @@ class EmbeddingDataset(BaseDataset):
         """
         # save the option and dataset root
         BaseDataset.__init__(self, opt)
-        self.data_root = opt.download_root
+        self.data_root = DATA_ROOT
         if not os.path.isdir(self.data_root):
             os.mkdir(self.data_root)
 
