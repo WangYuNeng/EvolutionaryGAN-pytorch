@@ -1,6 +1,6 @@
 set -ex
 python train.py --name lsgan_emb \
-       --dataset_mode embedding --batch_size 32 --dataroot None \
+       --dataset_mode embedding --batch_size 32 --dataroot None --max_vocab_size 200000 \
        --model two_player_gan --gan_mode unconditional \
        --gpu_ids 0 \
        --download_root /shares/Public/rays_data/embedding --source_dataset_name cbow --target_dataset_name skipgram \
