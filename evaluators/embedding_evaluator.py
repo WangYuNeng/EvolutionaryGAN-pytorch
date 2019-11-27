@@ -84,6 +84,59 @@ class EmbeddingEvaluator(BaseEvaluator):
         if self.muse_source is None:
             self.muse_source = self._load_muse_dictionary(language)
 
+        # prepare evaluate data
+        muse_source_words = [ self.source_idx2word[idx] for idx in self.muse_source['idx'] ]
+        target_idx = []
+        for i, word in enumerate(muse_source_words):
+            if word in self.target_word2idx:
+                target_idx.append(self.target_word2idx[word])
+        target_idx = np.array(target_idx, dtype=int)
+        target_idx = torch.from_numpy(target_idx).to(self.model.device)
+        target_idx = target_idx.unsqueeze(1)
+
+        # get all source embedding after mapping
+        batch_data = torch.from_numpy(np.array(self.dataset.source_vecs)).to(self.model.device)
+        batch_idx = torch.from_numpy(np.array([ i for i in range(len(self.source_idx2word))])).to(self.model.device)
+        self.model.set_input({'source': batch_data, 'source_idx': batch_idx})
+        self.model.forward()
+
+        # normalize word embeddings
+        emb1 = self.model.get_output().data
+        emb2 = torch.from_numpy(np.array(self.dataset.target_vecs)).to(self.model.device)
+        emb1 = emb1 / emb1.norm(2, 1, keepdim=True).expand_as(emb1)
+        emb2 = emb2 / emb2.norm(2, 1, keepdim=True).expand_as(emb2)
+
+        # get average k-nearest-neighbors distance between all embedding pairs
+        average_dist1 = self.get_nn_avg_dist(emb2, emb1, self.k, self.opt.batch_size)
+        average_dist2 = self.get_nn_avg_dist(emb1, emb2, self.k, self.opt.batch_size)
+        average_dist1 = torch.from_numpy(average_dist1).type_as(emb1)
+        average_dist2 = torch.from_numpy(average_dist2).type_as(emb2)
+
+        # queries -> scores
+        query = emb1[self.muse_source['idx']]
+        scores = query.mm(emb2.transpose(0, 1))
+        scores.mul_(2)
+        scores.sub_(average_dist1[self.muse_source['idx']][:, None])
+        scores.sub_(average_dist2[None, :])
+
+        top_k_distance, top_k_idx = torch.topk(scores, k=self.k, largest=False, dim=-1)
+
+        precisions = {
+            f'P@{k}': (top_k_idx[:, :k] == target_idx).float().sum(-1).mean().item()
+            for k in range(1, self.k + 1)
+        }
+
+        mean_distance = top_k_distance.mean().item()
+        mean_min_distance = top_k_distance[:, 0].mean().item()
+        mean_max_distance = top_k_distance[:, -1].mean().item()
+        return {
+            **precisions,
+            'mean_distance': mean_distance,
+            'mean_min_distance': mean_min_distance,
+            'mean_max_distance': mean_max_distance,
+        }
+
+        ''' nn metrics
         batch_size = self.opt.batch_size
         results = []
         source_vecs, source_idx = self.muse_source['vecs'], self.muse_source['idx']
@@ -97,6 +150,7 @@ class EmbeddingEvaluator(BaseEvaluator):
             results.append(self._get_previously_predicted_scores())
 
         return self.aggregate_results(results)
+        '''
 
     def _load_muse_dictionary(self, language):
         dictionary_path = os.path.join(
@@ -140,3 +194,21 @@ class EmbeddingEvaluator(BaseEvaluator):
             key: np.mean([r[key] for r in results])
             for key in results[0].keys()
         }
+
+    @staticmethod
+    def get_nn_avg_dist(emb, query, knn, batchsize):
+        """
+        Modify from MUSE, may add Faiss in the future
+        Compute the average distance of the `knn` nearest neighbors
+        for a given set of embeddings and queries.
+        Use Faiss if available.
+        """
+        bs = batchsize
+        all_distances = []
+        emb = emb.transpose(0, 1).contiguous()
+        for i in range(0, query.shape[0], bs):
+            distances = query[i:i + bs].mm(emb)
+            best_distances, _ = distances.topk(knn, dim=1, largest=True, sorted=True)
+            all_distances.append(best_distances.mean(1).cpu())
+        all_distances = torch.cat(all_distances)
+        return all_distances.numpy()
