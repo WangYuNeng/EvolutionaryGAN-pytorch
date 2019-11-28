@@ -51,3 +51,4 @@ embedding/train_embedding/data/*
 embedding/train_embedding/result/*
 monolingual/
 crosslingual
+.env
