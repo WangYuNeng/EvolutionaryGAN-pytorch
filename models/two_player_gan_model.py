@@ -40,8 +40,8 @@ class TwoPlayerGANModel(BaseModel):
             self.criterionD = GANLoss(opt.d_loss_mode, 'D', opt.which_D).to(self.device)
 
             # initialize optimizers
-            self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr_g, betas=(opt.beta1, opt.beta2))
-            self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=opt.lr_d, betas=(opt.beta1, opt.beta2))
+            self.optimizer_G = torch.optim.SGD(self.netG.parameters(), lr=opt.lr_g)
+            self.optimizer_D = torch.optim.SGD(self.netD.parameters(), lr=opt.lr_d)
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
 
