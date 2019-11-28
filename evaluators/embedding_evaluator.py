@@ -24,7 +24,8 @@ class EmbeddingEvaluator(BaseEvaluator):
         self.evaluation_size = opt.evaluation_size
         self.score_fns = {
             'in': self._get_previously_predicted_scores,
-            'muse-en': partial(self._get_muse_scores, language='en'),
+            'muse-nn-en': partial(self._get_muse_nn_scores, language='en'),
+            'muse-csls-en':partial(self._get_muse_csls_scores, language='en')
         }
         self.score_name = opt.score_name[0]  # support only one score for now
         self.muse_source = None
@@ -80,44 +81,59 @@ class EmbeddingEvaluator(BaseEvaluator):
         )
         return target_idx, predicted_embedding
 
-    def _get_muse_scores(self, language='en'):
+    def _get_muse_nn_scores(self, language='en'):
+        if self.muse_source is None:
+            self.muse_source = self._load_muse_dictionary(language)
+
+        batch_size = self.opt.batch_size
+        results = []
+        source_vecs, source_idx = self.muse_source['vecs'], self.muse_source['idx']
+        for i_batch in range(len(source_vecs) // batch_size):
+            batch_data = source_vecs[i_batch * batch_size: (i_batch + 1) * batch_size]
+            batch_idx = source_idx[i_batch * batch_size: (i_batch + 1) * batch_size]
+            batch_data = torch.from_numpy(batch_data).to(self.model.device)
+            batch_idx = torch.from_numpy(batch_idx).to(self.model.device)
+            self.model.set_input({'source': batch_data, 'source_idx': batch_idx})
+            self.model.forward()
+            results.append(self._get_previously_predicted_scores())
+
+        return self.aggregate_results(results)
+
+    def _get_muse_csls_scores(self, language='en'):
+        '''
+        Modify from MUSE
+        Compute cross-domain similarity local scaling of embeddings
+        '''
         if self.muse_source is None:
             self.muse_source = self._load_muse_dictionary(language)
 
         # prepare evaluate data
         muse_source_words = [ self.source_idx2word[idx] for idx in self.muse_source['idx'] ]
-        target_idx = []
-        for i, word in enumerate(muse_source_words):
-            if word in self.target_word2idx:
-                target_idx.append(self.target_word2idx[word])
-        target_idx = np.array(target_idx, dtype=int)
-        target_idx = torch.from_numpy(target_idx).to(self.model.device)
-        target_idx = target_idx.unsqueeze(1)
+        target_idx = [ self.target_word2idx[word] for word in muse_source_words if word in self.target_word2idx ]
+        target_idx = torch.tensor(target_idx).long().to(self.model.device).unsqueeze(1)
 
         # get all source embedding after mapping
-        batch_data = torch.from_numpy(np.array(self.dataset.source_vecs)).to(self.model.device)
-        batch_idx = torch.from_numpy(np.array([ i for i in range(len(self.source_idx2word))])).to(self.model.device)
+        batch_data = torch.from_numpy(self.dataset.source_vecs).to(self.model.device)
+        batch_idx = torch.tensor(list(self.source_idx2word.keys())).long().to(self.model.device)
         self.model.set_input({'source': batch_data, 'source_idx': batch_idx})
         self.model.forward()
 
         # normalize word embeddings
         emb1 = self.model.get_output().data
-        emb2 = torch.from_numpy(np.array(self.dataset.target_vecs)).to(self.model.device)
+        emb2 = torch.from_numpy(self.dataset.target_vecs).to(self.model.device)
         emb1 = emb1 / emb1.norm(2, 1, keepdim=True).expand_as(emb1)
         emb2 = emb2 / emb2.norm(2, 1, keepdim=True).expand_as(emb2)
 
         # get average k-nearest-neighbors distance between all embedding pairs
         average_dist1 = self.get_nn_avg_dist(emb2, emb1, self.k, self.opt.batch_size)
         average_dist2 = self.get_nn_avg_dist(emb1, emb2, self.k, self.opt.batch_size)
-        average_dist1 = torch.from_numpy(average_dist1).type_as(emb1)
-        average_dist2 = torch.from_numpy(average_dist2).type_as(emb2)
 
         # queries -> scores
         query = emb1[self.muse_source['idx']]
         scores = query.mm(emb2.transpose(0, 1))
         scores.mul_(2)
-        scores.sub_(average_dist1[self.muse_source['idx']][:, None])
-        scores.sub_(average_dist2[None, :])
+        scores.sub_(average_dist1[self.muse_source['idx']][:, np.newaxis])
+        scores.sub_(average_dist2[np.newaxis, :])
 
         top_k_distance, top_k_idx = torch.topk(scores, k=self.k, largest=False, dim=-1)
 
@@ -135,22 +151,6 @@ class EmbeddingEvaluator(BaseEvaluator):
             'mean_min_distance': mean_min_distance,
             'mean_max_distance': mean_max_distance,
         }
-
-        ''' nn metrics
-        batch_size = self.opt.batch_size
-        results = []
-        source_vecs, source_idx = self.muse_source['vecs'], self.muse_source['idx']
-        for i_batch in range(len(source_vecs) // batch_size):
-            batch_data = source_vecs[i_batch * batch_size: (i_batch + 1) * batch_size]
-            batch_idx = source_idx[i_batch * batch_size: (i_batch + 1) * batch_size]
-            batch_data = torch.from_numpy(batch_data).to(self.model.device)
-            batch_idx = torch.from_numpy(batch_idx).to(self.model.device)
-            self.model.set_input({'source': batch_data, 'source_idx': batch_idx})
-            self.model.forward()
-            results.append(self._get_previously_predicted_scores())
-
-        return self.aggregate_results(results)
-        '''
 
     def _load_muse_dictionary(self, language):
         dictionary_path = os.path.join(
@@ -209,6 +209,6 @@ class EmbeddingEvaluator(BaseEvaluator):
         for i in range(0, query.shape[0], bs):
             distances = query[i:i + bs].mm(emb)
             best_distances, _ = distances.topk(knn, dim=1, largest=True, sorted=True)
-            all_distances.append(best_distances.mean(1).cpu())
+            all_distances.append(best_distances.mean(1))
         all_distances = torch.cat(all_distances)
-        return all_distances.numpy()
+        return all_distances
