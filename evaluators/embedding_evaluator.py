@@ -135,7 +135,7 @@ class EmbeddingEvaluator(BaseEvaluator):
         scores.sub_(average_dist1[self.muse_source['idx']][:, np.newaxis])
         scores.sub_(average_dist2[np.newaxis, :])
 
-        top_k_distance, top_k_idx = torch.topk(scores, k=self.k, largest=False, dim=-1)
+        top_k_distance, top_k_idx = torch.topk(scores, k=self.k, largest=True, dim=-1)
 
         precisions = {
             f'P@{k}': (top_k_idx[:, :k] == target_idx).float().sum(-1).mean().item()
