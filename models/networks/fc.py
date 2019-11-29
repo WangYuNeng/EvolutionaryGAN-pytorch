@@ -1,16 +1,21 @@
 import torch
 from torch import nn
 
+from .expm import expm
+
 
 class FCGenerator(nn.Module):
 
     def __init__(self, dim=300):
         super().__init__()
-        self.layer = nn.Linear(dim, dim, bias=False)
+        self.layer = nn.Parameter(torch.zeros(size=(dim, dim)), requires_grad=True)
 
     def forward(self, x: dict):
         x = x['source']
-        return self.layer(x)
+        triu = self.layer.triu()
+        skew_symmetric_matrix = triu - triu.t()
+        mapping = expm(skew_symmetric_matrix)
+        return x @ mapping
 
 
 class FCDiscriminator(nn.Module):

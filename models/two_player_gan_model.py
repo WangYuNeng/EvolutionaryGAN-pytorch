@@ -1,4 +1,5 @@
 import torch
+
 from .base_model import BaseModel
 from models.networks import networks
 from models.networks.loss import GANLoss, cal_gradient_penalty
@@ -79,7 +80,9 @@ class TwoPlayerGANModel(BaseModel):
         self.loss_G_fake, self.loss_G_real = self.criterionG(fake_out, real_out)
         if self.opt.dataset_mode == 'embedding':
             embedding_dim = gen_data['data'].shape[1]
-            self.loss_G_orthogonal = torch.norm(self.netG.module.layer.weight.data - torch.eye(embedding_dim).cuda()) * 0.001
+            self.loss_G_orthogonal = torch.norm(
+                self.netG.module.layer.weight.data - torch.eye(embedding_dim, device=self.device)
+            ) * 0.001
         else:
             self.loss_G_orthogonal = 0.
         self.loss_G = self.loss_G_fake + self.loss_G_real + self.loss_G_orthogonal
@@ -121,8 +124,3 @@ class TwoPlayerGANModel(BaseModel):
             self.optimizer_D.step()
 
         self.step += 1
-
-    @staticmethod
-    def orthogonalize(generator, beta=0.001):
-        W = generator.module.layer.weight.data
-        W.copy_((1 + beta) * W - beta * W.mm(W.transpose(0, 1).mm(W)))
