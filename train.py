@@ -11,6 +11,11 @@ The script supports continue/resume training. Use '--continue_train' to resume y
 """
 import time
 import json
+import os
+
+from dotenv import load_dotenv
+load_dotenv('./.env')
+import wandb
 
 from options.train_options import TrainOptions
 from data import create_dataset
@@ -29,6 +34,8 @@ if __name__ == '__main__':
     total_iters = 0  # the total number of training iterations
     epoch = 0
 
+    wandb.login(key=os.environ.get('WANDB_API_KEY'))
+    wandb.init(config=opt)
     while total_iters < opt.total_num_giters:
         epoch_start_time = time.time()  # timer for entire epoch
         iter_data_time = time.time()  # timer for data loading per iteration
@@ -53,11 +60,13 @@ if __name__ == '__main__':
                 losses = model.get_current_losses()
                 print('iters: ', total_iters, end='')
                 print(json.dumps(losses, indent=4))
+                wandb.log(losses, step=total_iters)
 
             if total_iters % opt.score_freq == 0:  # print generation scores and save logging information to the disk
                 scores = evaluator.get_current_scores()
                 print('iters: ', total_iters, end='')
                 print(json.dumps(scores, indent=4))
+                wandb.log(scores, total_iters)
 
             if total_iters % opt.save_latest_freq == 0:  # cache our latest model every <save_latest_freq> iterations
                 print('saving the latest model (epoch %d, iters %d)' % (epoch, total_iters))
