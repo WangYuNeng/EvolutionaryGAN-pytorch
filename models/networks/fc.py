@@ -31,6 +31,6 @@ class FCDiscriminator(nn.Module):
         for layer in self.layers:
             x = nn.functional.dropout(x, 0.1)
             x = layer(x)
-            x = nn.functional.leaky_relu(x)
+            x = nn.functional.leaky_relu(x, 0.2)
         logits = self.out(x)
         return logits
