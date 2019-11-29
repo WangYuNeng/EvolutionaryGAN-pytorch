@@ -55,6 +55,7 @@ class EmbeddingDataset(BaseDataset):
 
         self.source_name = opt.source_dataset_name
         self.target_name = opt.target_dataset_name
+        self.normalize_mode = opt.preprocess
         self.source_url_name, self.target_url_name = self.get_url_names(
             self.source_name,
             self.target_name,
@@ -65,11 +66,11 @@ class EmbeddingDataset(BaseDataset):
 
         self.source_vecs, self.source_word2idx, self.source_idx2word = self.load_embeddings(
             self.source_url_name,
-            self.opt.max_vocab_size,
+            self.opt.max_dataset_size,
         )
         self.target_vecs, self.target_word2idx, self.target_idx2word = self.load_embeddings(
             self.target_url_name,
-            self.opt.max_vocab_size,
+            self.opt.max_dataset_size,
         )
 
     @staticmethod
@@ -108,7 +109,7 @@ class EmbeddingDataset(BaseDataset):
             )
         words = embedding_index.keys()
         vecs = np.asarray(list(embedding_index.values()))
-        vecs = (vecs - np.mean(vecs, axis=1, keepdims=True)) / np.std(vecs, axis=1, keepdims=True)  # normalize
+        vecs = self.normalize_vecs(vecs, self.normalize_mode)
         word2idx = {w: i for i, w in enumerate(words)}
         idx2word = {i: w for i, w in enumerate(words)}
         if not len(words) == min(vocab_size, max_vocab_size) or not vecs.shape[1] == emb_dim:
@@ -117,6 +118,23 @@ class EmbeddingDataset(BaseDataset):
                 f'vecs.shape = {vecs.shape}'
             )
         return vecs, word2idx, idx2word
+
+    @staticmethod
+    def normalize_vecs(vecs, normalize_mode):
+        """
+        Normalize embeddings by their norms / recenter them.
+        """
+        for t in normalize_mode.split(','):
+            if t == '':
+                continue
+            if t == 'center':
+                mean = vecs.mean(0, keepdim=True)
+                vecs -= mean
+            elif t == 'renorm':
+                vecs -= vecs.norm(2, 1, keepdim=True)
+            else:
+                raise Exception('Unknown normalization type: "%s"' % t)
+        return vecs
 
     @staticmethod
     def load_line_from_file(line):
