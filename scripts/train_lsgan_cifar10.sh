@@ -11,4 +11,4 @@ python train.py --name lsgan_cifar10 \
        --no_dropout --no_flip \
        --D_iters 3 \
        --use_pytorch_scores --score_name IS --evaluation_size 50000 --fid_batch_size 500 \
-       --print_freq 2000 --display_freq 2000 --score_freq 5000 --display_id -1 --save_giters_freq 100000
+       --print_freq 2000 --display_freq 2000 --score_freq 5000 --save_giters_freq 100000
