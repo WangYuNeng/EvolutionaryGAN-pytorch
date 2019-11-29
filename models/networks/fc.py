@@ -21,7 +21,7 @@ class FCDiscriminator(nn.Module):
             nn.Linear(dim, n_hidden),
             *[
                 nn.Linear(n_hidden, n_hidden)
-                for _ in range(n_layers - 2)
+                for _ in range(n_layers - 1)
             ],
         ])
         self.out = nn.Linear(n_hidden, 1)
@@ -29,7 +29,8 @@ class FCDiscriminator(nn.Module):
     def forward(self, x: dict):
         x = x['data']
         for layer in self.layers:
+            x = nn.functional.dropout(x, 0.1)
             x = layer(x)
-            x = torch.relu(x)
+            x = nn.functional.leaky_relu(x)
         logits = self.out(x)
         return logits
