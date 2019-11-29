@@ -14,5 +14,5 @@ python train.py --name lsgan_emb \
        --no_dropout --no_flip \
        --D_iters 5 \
        --score_name in \
-       --print_freq 2000 --display_freq 2000 --score_freq 10000 --display_id -1 \
+       --print_freq 2000 --display_freq 2000 --score_freq 10000 \
        --save_latest_freq 100000 --save_giters_freq 100000
