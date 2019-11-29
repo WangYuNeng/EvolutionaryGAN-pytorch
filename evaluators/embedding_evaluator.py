@@ -108,8 +108,8 @@ class EmbeddingEvaluator(BaseEvaluator):
             self.muse_source = self._load_muse_dictionary(language)
 
         # prepare evaluate data
-        muse_source_words = [ self.source_idx2word[idx] for idx in self.muse_source['idx'] ]
-        target_idx = [ self.target_word2idx[word] for word in muse_source_words if word in self.target_word2idx ]
+        muse_source_words = self.muse_source['words']
+        target_idx = self.muse_source['target_idx']
         target_idx = torch.tensor(target_idx).long().to(self.model.device).unsqueeze(1)
 
         # get all source embedding after mapping
@@ -135,21 +135,21 @@ class EmbeddingEvaluator(BaseEvaluator):
         scores.sub_(average_dist1[self.muse_source['idx']][:, np.newaxis])
         scores.sub_(average_dist2[np.newaxis, :])
 
-        top_k_distance, top_k_idx = torch.topk(scores, k=self.k, largest=True, dim=-1)
+        top_k_similarity, top_k_idx = torch.topk(scores, k=self.k, largest=True, dim=-1)
 
         precisions = {
             f'P@{k}': (top_k_idx[:, :k] == target_idx).float().sum(-1).mean().item()
             for k in range(1, self.k + 1)
         }
 
-        mean_distance = top_k_distance.mean().item()
-        mean_min_distance = top_k_distance[:, 0].mean().item()
-        mean_max_distance = top_k_distance[:, -1].mean().item()
+        mean_similarity = top_k_similarity.mean().item()
+        mean_min_similarity = top_k_similarity[:, 0].mean().item()
+        mean_max_similarity = top_k_similarity[:, -1].mean().item()
         return {
             **precisions,
-            'mean_distance': mean_distance,
-            'mean_min_distance': mean_min_distance,
-            'mean_max_distance': mean_max_distance,
+            'mean_similarity': mean_similarity,
+            'mean_min_similarity': mean_min_similarity,
+            'mean_max_similarity': mean_max_similarity,
         }
 
     def _load_muse_dictionary(self, language):
@@ -167,10 +167,14 @@ class EmbeddingEvaluator(BaseEvaluator):
             pair for pair in pair_words
             if pair[0] in self.source_word2idx and pair[1] in self.target_word2idx
         ]
+        source_words = [ w for w, _ in pair_words]
         source_idx = np.array([self.source_word2idx[w] for w, _ in pair_words])
         source_vecs = self.dataset.source_vecs[source_idx]
+
+        target_idx = np.array([self.target_word2idx[w] for w, _ in pair_words])
+
         print(f'Evaluating on {len(source_vecs)} words from {dictionary_path}.')
-        return {'vecs': source_vecs, 'idx': source_idx}
+        return {'words': source_words, 'vecs': source_vecs, 'idx': source_idx, 'target_idx': target_idx}
 
     @staticmethod
     def l2_distance(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
