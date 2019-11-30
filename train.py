@@ -85,5 +85,5 @@ if __name__ == '__main__':
                 model.save_networks(total_iters)
 
         epoch += 1
-        print('(epoch_%d) End of giters %d / %d \t Time Taken: %d sec' % (
-        epoch, total_iters, opt.total_num_giters, time.time() - epoch_start_time))
+        print('(epoch_%d) End of giters %d / %d \t Time Taken: %d sec \t %d sample / s' % (
+        epoch, total_iters, opt.total_num_giters, time.time() - epoch_start_time, len(dataset) // (time.time() - epoch_start_time)))

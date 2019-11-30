@@ -163,4 +163,4 @@ class EmbeddingDataset(BaseDataset):
 
     def __len__(self):
         """Return the total number of word-vectors."""
-        return len(self.target_vecs)
+        return min(len(self.target_vecs), self.opt.most_frequent)
