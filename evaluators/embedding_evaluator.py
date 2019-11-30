@@ -143,8 +143,8 @@ class EmbeddingEvaluator(BaseEvaluator):
         }
 
         mean_similarity = top_k_similarity.mean().item()
-        mean_min_similarity = top_k_similarity[:, 0].mean().item()
-        mean_max_similarity = top_k_similarity[:, -1].mean().item()
+        mean_max_similarity = top_k_similarity[:, 0].mean().item()
+        mean_min_similarity = top_k_similarity[:, -1].mean().item()
         return {
             **precisions,
             'mean_similarity': mean_similarity,
