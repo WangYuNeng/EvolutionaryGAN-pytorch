@@ -25,12 +25,7 @@ class EmbeddingDataset(BaseDataset):
         '0to0.1.skipgram.vec': 'https://drive.google.com/open?id=1xNJC-l_iQuL9CVotfaA25sKXESpV1U6O',
         '0.1to0.2.skipgram.vec': 'https://drive.google.com/open?id=1RGMshfU03ZTLFPf_qqxlYAsGP18m2Nhw',
         '0to0.1.glove.vec': 'https://drive.google.com/open?id=1atZnVBUqaN9zOfTpilTbV0QCmS8mbYKF',
-        '0.1to0.2.glove.vec': 'https://drive.google.com/open?id=1AmRZy-tE8YJbU-qYEhK7OPzyYvFo6xj4',
-        '0to0.1.word2vec.cbow.vec': 'https://drive.google.com/open?id=1Y7aNqEbyB9nrbLExOb6BTn8po3234Qrb',
-        '0.1to0.2.word2vec.cbow.vec': 'https://drive.google.com/open?id=1jVp8Jtqg5l03TokHEY1Mn91zb549Xy8V',
-        '0to0.1.word2vec.skipgram.vec': 'https://drive.google.com/open?id=1PRnDSx42YFIw5Jnj5mnTWeTJmmQvueKA',
-        '0.1to0.2.word2vec.skipgram.vec': 'https://drive.google.com/open?id=1PeB4Lyx_xLQCV9wHJWs2PGsJ7zpRqZ6k',
-
+        '0.1to0.2.glove.vec': 'https://drive.google.com/open?id=1Hl-OiRB6M8XfsQW2sd9UOZPTk_1DbSNc',
     }
 
     @staticmethod
@@ -113,7 +108,7 @@ class EmbeddingDataset(BaseDataset):
             )
         words = embedding_index.keys()
         vecs = np.asarray(list(embedding_index.values()))
-        # vecs = (vecs - np.mean(vecs, axis=1, keepdims=True)) / np.std(vecs, axis=1, keepdims=True)  # normalize
+        vecs = (vecs - np.mean(vecs, axis=1, keepdims=True)) / np.std(vecs, axis=1, keepdims=True)  # normalize
         word2idx = {w: i for i, w in enumerate(words)}
         idx2word = {i: w for i, w in enumerate(words)}
         if not len(words) == min(vocab_size, max_vocab_size) or not vecs.shape[1] == emb_dim:

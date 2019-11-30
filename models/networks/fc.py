@@ -15,7 +15,7 @@ class FCGenerator(nn.Module):
 
 class FCDiscriminator(nn.Module):
 
-    def __init__(self, dim=300, n_layers=3, n_hidden=2048):
+    def __init__(self, dim=300, n_layers=2, n_hidden=2048):
         super().__init__()
         self.layers = nn.ModuleList([
             nn.Linear(dim, n_hidden),
