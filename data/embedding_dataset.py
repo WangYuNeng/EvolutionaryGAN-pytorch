@@ -24,8 +24,13 @@ class EmbeddingDataset(BaseDataset):
         '0.1to0.2.cbow.vec': 'https://drive.google.com/open?id=1jVp8Jtqg5l03TokHEY1Mn91zb549Xy8V',
         '0to0.1.skipgram.vec': 'https://drive.google.com/open?id=1xNJC-l_iQuL9CVotfaA25sKXESpV1U6O',
         '0.1to0.2.skipgram.vec': 'https://drive.google.com/open?id=1RGMshfU03ZTLFPf_qqxlYAsGP18m2Nhw',
+        '0to0.1.word2vec-cbow.vec': 'https://drive.google.com/open?id=1Y7aNqEbyB9nrbLExOb6BTn8po3234Qrb',
+        '0.1to0.2.word2vec-cbow.vec': 'https://drive.google.com/open?id=1PRnDSx42YFIw5Jnj5mnTWeTJmmQvueKA',
+        '0to0.1.word2vec-skipgram.vec': 'https://drive.google.com/open?id=11iZVCbY-qwQZBdiEyjpt-5XdsPZsDHEP',
+        '0.1to0.2.word2vec-skipgram.vec': 'https://drive.google.com/open?id=1PeB4Lyx_xLQCV9wHJWs2PGsJ7zpRqZ6k',
         '0to0.1.glove.vec': 'https://drive.google.com/open?id=1atZnVBUqaN9zOfTpilTbV0QCmS8mbYKF',
-        '0.1to0.2.glove.vec': 'https://drive.google.com/open?id=1Hl-OiRB6M8XfsQW2sd9UOZPTk_1DbSNc',
+        '0.1to0.2.glove.vec': 'https://drive.google.com/open?id=1AmRZy-tE8YJbU-qYEhK7OPzyYvFo6xj4',
+
     }
 
     @staticmethod
@@ -55,6 +60,7 @@ class EmbeddingDataset(BaseDataset):
 
         self.source_name = opt.source_dataset_name
         self.target_name = opt.target_dataset_name
+        self.normalize_mode = opt.preprocess
         self.source_url_name, self.target_url_name = self.get_url_names(
             self.source_name,
             self.target_name,
@@ -65,11 +71,11 @@ class EmbeddingDataset(BaseDataset):
 
         self.source_vecs, self.source_word2idx, self.source_idx2word = self.load_embeddings(
             self.source_url_name,
-            self.opt.max_vocab_size,
+            self.opt.max_dataset_size,
         )
         self.target_vecs, self.target_word2idx, self.target_idx2word = self.load_embeddings(
             self.target_url_name,
-            self.opt.max_vocab_size,
+            self.opt.max_dataset_size,
         )
 
     @staticmethod
@@ -108,7 +114,7 @@ class EmbeddingDataset(BaseDataset):
             )
         words = embedding_index.keys()
         vecs = np.asarray(list(embedding_index.values()))
-        vecs = (vecs - np.mean(vecs, axis=1, keepdims=True)) / np.std(vecs, axis=1, keepdims=True)  # normalize
+        vecs = self.normalize_vecs(vecs, self.normalize_mode)
         word2idx = {w: i for i, w in enumerate(words)}
         idx2word = {i: w for i, w in enumerate(words)}
         if not len(words) == min(vocab_size, max_vocab_size) or not vecs.shape[1] == emb_dim:
@@ -117,6 +123,23 @@ class EmbeddingDataset(BaseDataset):
                 f'vecs.shape = {vecs.shape}'
             )
         return vecs, word2idx, idx2word
+
+    @staticmethod
+    def normalize_vecs(vecs: np.array, normalize_mode: str):
+        """
+        Normalize embeddings by their norms / recenter them.
+        """
+        for t in normalize_mode.split(','):
+            if t == '':
+                continue
+            if t == 'center':
+                mean = vecs.mean(0, keepdims=True)
+                vecs -= mean
+            elif t == 'renorm':
+                vecs /= vecs.norm(2, 1, keepdims=True)
+            else:
+                raise Exception('Unknown normalization type: "%s"' % t)
+        return vecs
 
     @staticmethod
     def load_line_from_file(line):
