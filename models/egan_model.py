@@ -21,10 +21,10 @@ from models.networks import networks
 from models.networks.loss import GANLoss, cal_gradient_penalty
 from models.networks.utils import get_prior
 from util.util import one_hot
+from util.minheap import minheap
 
 import copy 
 import math 
-import heapq
 
 
 class EGANModel(BaseModel):
@@ -93,8 +93,8 @@ class EGANModel(BaseModel):
             for g_loss in opt.g_loss_mode: 
                 self.G_mutations.append(GANLoss(g_loss, 'G', opt.which_D).to(self.device))
             # initialize optimizers
-            self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr_g, betas=(opt.beta1, opt.beta2))
-            self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=opt.lr_d, betas=(opt.beta1, opt.beta2))
+            self.optimizer_G = torch.optim.SGD(self.netG.parameters(), lr=opt.lr_g)
+            self.optimizer_D = torch.optim.SGD(self.netD.parameters(), lr=opt.lr_d)
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
         
@@ -186,7 +186,7 @@ class EGANModel(BaseModel):
         be updated using the best network.
         '''
 
-        G_heap = [ (-float('inf'), None) for i in range(self.opt.candi_num) ]
+        G_heap = minheap([ (-float('inf'), None) for i in range(self.opt.candi_num) ])
 
         # variation-evaluation-selection
         for i in range(self.opt.candi_num):
@@ -207,18 +207,17 @@ class EGANModel(BaseModel):
                 fitness = self.fitness_score(eval_data)
 
                 # Selection
-                if fitness > G_heap[0][0]:
-                    print(fitness)
+                if fitness > G_heap.top()[0]:
                     netG_dict = copy.deepcopy(self.netG.state_dict())
                     optmizerG_dict = copy.deepcopy(self.optimizer_G.state_dict())
-                    heapq.heapreplace(G_heap, (fitness, (netG_dict, optmizerG_dict)))
+                    G_heap.replace((fitness, (netG_dict, optmizerG_dict)))
         
-        self.G_candis = [ obj[1][0] for obj in enumerate(G_heap) ]
-        self.optG_candis = [ obj[1][1] for obj in enumerate(G_heap) ]
-        
+        self.G_candis = [ obj[1][0] for obj in G_heap.array ]
+        self.optG_candis = [ obj[1][1] for obj in G_heap.array ]
+
         # find argmax fitness netG
         max_val, max_idx = -float('inf'), 0
-        for i, obj in enumerate(G_heap):
+        for i, obj in enumerate(G_heap.array):
             if obj[0] > max_val:
                 max_val, max_idx = obj[0], i
 
