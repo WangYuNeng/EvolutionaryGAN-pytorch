@@ -245,17 +245,21 @@ def calculate_inception_score(pred, num_splits=10):
 # Loop and run the sampler and the net until it accumulates num_inception_images
 # activations. Return the pool, the logits, and the labels (if one wants 
 # Inception Accuracy the labels of the generated class will be needed)
-def accumulate_inception_activations(sample, net, num_inception_images=50000):
-    pool, logits, labels = [], [], []
-    # while (torch.cat(logits, 0).shape[0] if len(logits) else 0) < num_inception_images:
-    for i in range(0, num_inception_images, 100):
-        with torch.no_grad():
-            images = sample[i:i + 100]
+def accumulate_inception_activations(sample, net, num_inception_images=50000, bs=32):
+    if not len(sample) == num_inception_images:
+        raise ValueError('incompatible samples and num_inception_images, '
+                         f'lens are {len(sample)} and {num_inception_images}')
+    pool, logits = [], []
+    sample_idx, count = 0, 0
+    with torch.no_grad():
+        while count < num_inception_images:
+            images = sample[sample_idx:sample_idx + bs]
             pool_val, logits_val = net(images)
             pool += [pool_val]
             logits += [F.softmax(logits_val, 1)]
-            # labels += [labels_val]
-    return torch.cat(pool, 0), torch.cat(logits, 0), None
+            count += len(pool_val)
+            sample_idx = (sample_idx + bs) % len(sample)
+    return torch.cat(pool, 0), torch.cat(logits, 0)
 
 
 # Load and wrap the Inception model
@@ -286,7 +290,7 @@ def prepare_inception_metrics(dataset, parallel, no_is=False, no_fid=False):
                               prints=True, use_torch=True):
         if prints:
             print('Gathering activations...')
-        pool, logits, labels = accumulate_inception_activations(sample, net, num_inception_images)
+        pool, logits = accumulate_inception_activations(sample, net, num_inception_images)
         if prints:
             print('Calculating Inception Score...')
         if no_is:
@@ -296,8 +300,6 @@ def prepare_inception_metrics(dataset, parallel, no_is=False, no_fid=False):
             IS_mean, IS_std = calculate_inception_score(logits.cpu().numpy(), num_splits)
         if no_fid:
             FID = 9999.0
-            mu = 0.
-            sigma = 0.
         else:
             if prints:
                 print('Calculating means and covariances...')
@@ -313,8 +315,6 @@ def prepare_inception_metrics(dataset, parallel, no_is=False, no_fid=False):
                 FID = float(FID.cpu().numpy())
             else:
                 FID = numpy_calculate_frechet_distance(mu.cpu().numpy(), sigma.cpu().numpy(), data_mu, data_sigma)
-        # Delete mu, sigma, pool, logits, and labels, just in case
-        del mu, sigma, pool, logits, labels
         return IS_mean, IS_std, FID
 
     return get_inception_metrics

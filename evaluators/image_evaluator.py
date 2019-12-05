@@ -15,8 +15,12 @@ class ImageEvaluator(BaseEvaluator):
             no_FID = not('FID' in self.opt.score_name)
             no_IS = not('IS' in self.opt.score_name)
             parallel = len(opt.gpu_ids) > 1
-            self.get_inception_metrics = inception_utils.prepare_inception_metrics(opt.dataset_name, parallel, no_IS,
-                                                                                   no_FID)
+            self.get_inception_metrics = inception_utils.prepare_inception_metrics(
+                opt.dataset_name,
+                parallel,
+                no_IS,
+                no_FID,
+            )
         elif 'FID' in self.opt.score_name:
             from evaluators.TTUR import fid
             STAT_FILE = self.opt.fid_stat_file
@@ -39,22 +43,20 @@ class ImageEvaluator(BaseEvaluator):
 
     def get_current_scores(self):
         scores_ret = OrderedDict()
-        return scores_ret
         # TODO
-        # print("%d samples generating done" % self.opt.evaluation_size)
-        # if self.opt.use_pytorch_scores:
-        #     self.IS_mean, self.IS_var, self.FID = self.get_inception_metrics(
-        #         samples,
-        #         self.opt.evaluation_size,
-        #         num_splits=10,
-        #     )
-        #     if 'FID' in self.opt.score_name:
-        #         print(self.FID)
-        #         scores_ret['FID'] = float(self.FID)
-        #     if 'IS' in self.opt.score_name:
-        #         print(self.IS_mean, self.IS_var)
-        #         scores_ret['IS_mean'] = float(self.IS_mean)
-        #         scores_ret['IS_var'] = float(self.IS_var)
+        samples = self.model.get_output()
+        if self.opt.use_pytorch_scores:
+            IS_mean, IS_var, FID = self.get_inception_metrics(
+                samples,
+                self.opt.batch_size,
+                num_splits=10,
+            )
+            if 'FID' in self.opt.score_name:
+                scores_ret['FID'] = float(FID)
+            if 'IS' in self.opt.score_name:
+                scores_ret['IS_mean'] = float(IS_mean)
+                scores_ret['IS_var'] = float(IS_var)
+        return scores_ret
         #
         # else:
         #     # Cast, reshape and transpose (BCHW -> BHWC)
