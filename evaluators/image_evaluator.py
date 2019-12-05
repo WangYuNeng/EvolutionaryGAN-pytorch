@@ -2,7 +2,6 @@ from collections import OrderedDict
 
 import numpy as np
 
-from evaluators.TTUR import fid
 from evaluators.inception_pytorch import inception_utils
 from .base_evaluator import BaseEvaluator
 
@@ -19,6 +18,7 @@ class ImageEvaluator(BaseEvaluator):
             self.get_inception_metrics = inception_utils.prepare_inception_metrics(opt.dataset_name, parallel, no_IS,
                                                                                    no_FID)
         elif 'FID' in self.opt.score_name:
+            from evaluators.TTUR import fid
             STAT_FILE = self.opt.fid_stat_file
             INCEPTION_PATH = "./inception_v3/"
 
