@@ -34,7 +34,7 @@ cd EvolutionaryGAN-pytorch
 
 - Preparing *.npz* files for Pytorch Inception metrics evaluation (cifar10 as an example):
 ```
-python inception_pytorch/calculate_inception_moments.py --dataset C10 --data_root datasets
+python evaluators/inception_pytorch/calculate_inception_moments.py --dataset C10 --data_root datasets
 ```
 
 ### Two-player GANs Training

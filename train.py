@@ -56,7 +56,8 @@ if __name__ == '__main__':
             total_iters += 1
 
             if total_iters % opt.display_freq == 0:
-                pass
+                samples = model.get_output()
+                wandb.log({"samples": [wandb.Image(im) for im in samples]})
 
             if total_iters % opt.print_freq == 0:  # print training losses and save logging information to the disk
                 losses = model.get_current_losses()
