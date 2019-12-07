@@ -1,24 +1,24 @@
 
-class minheap:
-    def __init__(self, array=list()):
+class MinHeap:
+    def __init__(self, array=()):
         # array must be heapified first, which is true in egan_model
         self.array = array
 
-    def push(self, item):
+    def push(self, G_Net):
         '''
         push an item to the heap
-        item <- (key, value)
+        G_Net(fitness, G_candis, optG_candis)
         '''
         cur_idx = len(self.array)
         self.array.append(None)
         while cur_idx != 0:
             parent_idx = (cur_idx-1) // 2
-            if self.array[parent_idx][0] <= item[0]:
+            if self.array[parent_idx].fitness <= G_Net.fitness:
                 break
             else:
                 self.array[cur_idx] = self.array[parent_idx]
                 cur_idx = parent_idx
-        self.array[cur_idx] = item
+        self.array[cur_idx] = G_Net
 
     def pop(self):
         '''
@@ -37,12 +37,20 @@ class minheap:
         '''
         return self.array[0]
 
-    def replace(self, item):
+    def replace(self, G_Net):
         '''
         replace the smallest item with input item
         '''
-        self.array[0] = item
+        self.array[0] = G_Net
         self._heapify_top()
+
+    def argmax(self):
+        # find argmax fitness netG
+        max_val, max_idx = -float('inf'), 0
+        for i, net in enumerate(self.array):
+            if net.fitness > max_val:
+                max_val, max_idx = net.fitness, i
+        return max_idx
 
     def _heapify_top(self):
         '''
@@ -56,19 +64,17 @@ class minheap:
             if left_idx >= len(self.array):
                 break
             elif right_idx >= len(self.array):
-                if self.array[cur_idx][0] > self.array[left_idx][0]:
-                    self._swap(cur_idx, left_idx)
+                if self.array[cur_idx].fitness > self.array[left_idx].fitness:
+                    self._swap(self.array, cur_idx, left_idx)
                 break
             else:
-                smaller_idx = left_idx if self.array[right_idx][0] > self.array[left_idx][0] else right_idx
-                if self.array[cur_idx][0] > self.array[smaller_idx][0]:
-                    self._swap(cur_idx, smaller_idx)
+                smaller_idx = left_idx if self.array[right_idx].fitness > self.array[left_idx].fitness else right_idx
+                if self.array[cur_idx].fitness > self.array[smaller_idx].fitness:
+                    self._swap(self.array, cur_idx, smaller_idx)
                     cur_idx = smaller_idx
                 else:
                     break
-
-    def _swap(self, idx1, idx2):
-        tmp = self.array[idx1]
-        self.array[idx1] = self.array[idx2]
-        self.array[idx2] = tmp
+    @staticmethod
+    def _swap(array, idx1, idx2):
+        array[idx1], array[idx2] = array[idx2], array[idx1]
 
