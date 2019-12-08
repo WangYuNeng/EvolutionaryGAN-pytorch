@@ -22,6 +22,7 @@ from models.networks import networks
 from models.networks import GANLoss, cal_gradient_penalty
 from models.networks import get_prior
 from util.util import one_hot
+from .optimizers import get_optimizer
 
 import copy 
 import math 
@@ -95,8 +96,8 @@ class EGANModel(BaseModel):
             # define loss functions
             self.criterionD = GANLoss(opt.d_loss_mode, 'D', opt.which_D).to(self.device)
             # initialize optimizers
-            self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr_g, betas=(opt.beta1, opt.beta2))
-            self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=opt.lr_d, betas=(opt.beta1, opt.beta2))
+            self.optimizer_G = get_optimizer(opt.optim_type)(self.netG.parameters(), lr=opt.lr_g)
+            self.optimizer_D = get_optimizer(opt.optim_type)(self.netD.parameters(), lr=opt.lr_d)
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
         
