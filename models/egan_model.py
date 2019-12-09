@@ -22,6 +22,7 @@ from models.networks.loss import GANLoss, cal_gradient_penalty
 from models.networks.utils import get_prior
 from util.util import one_hot
 from util.minheap import MinHeap
+from .optimizers import get_optimizer
 
 import copy 
 import math 
@@ -94,8 +95,8 @@ class EGANModel(BaseModel):
             for g_loss in opt.g_loss_mode: 
                 self.G_mutations.append(GANLoss(g_loss, 'G', opt.which_D).to(self.device))
             # initialize optimizers
-            self.optimizer_G = torch.optim.SGD(self.netG.parameters(), lr=opt.lr_g)
-            self.optimizer_D = torch.optim.SGD(self.netD.parameters(), lr=opt.lr_d)
+            self.optimizer_G = get_optimizer(opt.optim_type)(self.netG.parameters(), lr=opt.lr_g)
+            self.optimizer_D = get_optimizer(opt.optim_type)(self.netD.parameters(), lr=opt.lr_d)
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
         

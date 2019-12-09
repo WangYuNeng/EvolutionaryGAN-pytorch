@@ -32,7 +32,8 @@ class DCGANGenerator(nn.Module):
 
     def forward(self, inp):
         inp = inp['data']
-        return self.model(inp.view(-1, self.z_dim, 1, 1))
+        out = self.model(inp.view(-1, self.z_dim, 1, 1))
+        return out
 
 
 class DCGANDiscriminator(nn.Module):

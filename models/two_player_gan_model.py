@@ -4,6 +4,7 @@ from models.networks import networks
 from models.networks.loss import GANLoss, cal_gradient_penalty
 from models.networks.utils import get_prior
 from util.util import one_hot
+from .optimizers import get_optimizer
 
 
 class TwoPlayerGANModel(BaseModel):
@@ -22,8 +23,7 @@ class TwoPlayerGANModel(BaseModel):
     def __init__(self, opt):
         BaseModel.__init__(self, opt)
         self.output = None
-        self.loss_names = ['G_real', 'G_fake', 'D_real', 'D_fake', 'D_gp', 'G', 'D']
-        self.visual_names = ['real_visual', 'gen_visual']
+        self.loss_names = ['G_real', 'G_fake', 'G_orthogonal', 'D_real', 'D_fake', 'D_gp', 'G', 'D']
 
         if self.isTrain:  # only defined during training time
             self.model_names = ['G', 'D']
@@ -40,8 +40,8 @@ class TwoPlayerGANModel(BaseModel):
             self.criterionD = GANLoss(opt.d_loss_mode, 'D', opt.which_D).to(self.device)
 
             # initialize optimizers
-            self.optimizer_G = torch.optim.SGD(self.netG.parameters(), lr=opt.lr_g)
-            self.optimizer_D = torch.optim.SGD(self.netD.parameters(), lr=opt.lr_d)
+            self.optimizer_G = get_optimizer(opt.optim_type)(self.netG.parameters(), lr=opt.lr_g)
+            self.optimizer_D = get_optimizer(opt.optim_type)(self.netD.parameters(), lr=opt.lr_d)
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
 
@@ -60,7 +60,7 @@ class TwoPlayerGANModel(BaseModel):
             return {'data': gen_data}
         elif self.opt.gan_mode == 'unconditional-z':
             z = get_prior(self.opt.batch_size, self.opt.z_dim, self.opt.z_type, self.device)
-            gen_data = self.netG(z)
+            gen_data = self.netG({'data': z})
             self.set_output(gen_data)
             return {'data': gen_data}
         else:
@@ -76,9 +76,13 @@ class TwoPlayerGANModel(BaseModel):
         # pass D
         real_out = self.netD(self.inputs)
         fake_out = self.netD(gen_data)
-
         self.loss_G_fake, self.loss_G_real = self.criterionG(fake_out, real_out)
-        self.loss_G = self.loss_G_fake + self.loss_G_real
+        if self.opt.dataset_mode == 'embedding':
+            embedding_dim = gen_data['data'].shape[1]
+            self.loss_G_orthogonal = torch.norm(self.netG.module.layer.weight.data - torch.eye(embedding_dim)) * 0.001
+        else:
+            self.loss_G_orthogonal = 0.
+        self.loss_G = self.loss_G_fake + self.loss_G_real + self.loss_G_orthogonal
         self.loss_G.backward()
 
     def backward_D(self, gen_data):
@@ -110,7 +114,6 @@ class TwoPlayerGANModel(BaseModel):
             self.optimizer_G.zero_grad()
             self.backward_G(gen_data)
             self.optimizer_G.step()
-            self.orthogonalize(self.netG)
         else:
             self.set_requires_grad(self.netD, True)
             self.optimizer_D.zero_grad()
