@@ -16,16 +16,17 @@ You need to implement the following functions:
     <optimize_parameters>: Update network weights; it will be called in every training iteration.
 """
 import torch
-import numpy as np 
 from .base_model import BaseModel
 from models.networks import networks
-from models.networks import GANLoss, cal_gradient_penalty
-from models.networks import get_prior
+from models.networks.loss import GANLoss, cal_gradient_penalty
+from models.networks.utils import get_prior
 from util.util import one_hot
+from util.minheap import MinHeap
 from .optimizers import get_optimizer
 
 import copy 
 import math 
+import collections
 
 
 class EGANModel(BaseModel):
@@ -72,6 +73,7 @@ class EGANModel(BaseModel):
         - define loss function, visualization images, model names, and optimizers
         """
         BaseModel.__init__(self, opt)  # call the initialization method of BaseModel
+        self.output = None
         self.loss_names = ['G_real', 'G_fake', 'D_real', 'D_fake', 'D_gp', 'G', 'D']
         self.visual_names = ['real_visual', 'gen_visual']
 
@@ -82,19 +84,16 @@ class EGANModel(BaseModel):
 
         # define networks 
         self.netG = networks.define_G(opt, self.gpu_ids)
-
-        if self.isTrain:
-            # define a discriminator; conditional GANs need to take both input and output images;
-            # Therefore, #channels for D is input_nc + output_nc
-            self.netD = networks.define_D(opt, self.gpu_ids)
-
         if self.isTrain:  # only defined during training time
+            self.netD = networks.define_D(opt, self.gpu_ids)
+            
+            # define loss functions
+            self.criterionG = None # Will be define by G_mutations
+            self.criterionD = GANLoss(opt.d_loss_mode, 'D', opt.which_D).to(self.device)
             # define G mutations 
             self.G_mutations = []
             for g_loss in opt.g_loss_mode: 
                 self.G_mutations.append(GANLoss(g_loss, 'G', opt.which_D).to(self.device))
-            # define loss functions
-            self.criterionD = GANLoss(opt.d_loss_mode, 'D', opt.which_D).to(self.device)
             # initialize optimizers
             self.optimizer_G = get_optimizer(opt.optim_type)(self.netG.parameters(), lr=opt.lr_g)
             self.optimizer_D = get_optimizer(opt.optim_type)(self.netD.parameters(), lr=opt.lr_d)
@@ -108,153 +107,136 @@ class EGANModel(BaseModel):
             self.G_candis.append(copy.deepcopy(self.netG.state_dict()))
             self.optG_candis.append(copy.deepcopy(self.optimizer_G.state_dict()))
 
-        # the # of image for each evaluation
-        self.eval_size = max(math.ceil((opt.batch_size * opt.D_iters) / opt.candi_num), opt.eval_size)
 
-    def forward(self, batch_size=None):
-        bs = self.opt.batch_size if batch_size is None else batch_size
-        z = get_prior(bs, self.opt.z_dim, self.opt.z_type, self.device)
-        # Fake images
+    def forward(self) -> dict:
+        batch_size = self.opt.batch_size
         if self.opt.gan_mode == "conditional":
-            y = self.CatDis.sample([bs])
-            y_ = one_hot(y, [bs, self.opt.cat_num])
-            gen_imgs = self.netG(z, self.y_)
+            z = get_prior(self.opt.batch_size, self.opt.z_dim, self.opt.z_type, self.device)
+            y = self.CatDis.sample([batch_size])
+            y = one_hot(y, [batch_size, self.opt.cat_num])
+            gen_data = self.netG(z, y)
+            self.set_output(gen_data)
+            return {'data': gen_data, 'condition': y}
         elif self.opt.gan_mode == 'unconditional':
-            pass
+            gen_data = self.netG(self.inputs)
+            self.set_output(gen_data)
+            return {'data': gen_data}
         elif self.opt.gan_mode == 'unconditional-z':
-            gen_imgs = self.netG(z)
-            y_ = None
+            z = get_prior(self.opt.batch_size, self.opt.z_dim, self.opt.z_type, self.device)
+            gen_data = self.netG(z)
+            self.set_output(gen_data)
+            return {'data': gen_data}
         else:
             raise ValueError(f'unsupported gan_mode {self.opt.gan_mode}')
-        return gen_imgs, y_
+    
+    def set_output(self, x):
+        self.output = x
 
-    def backward_G(self, criterionG):
-        # pass D 
-        if not self.opt.gan_mode == 'conditional':
-            self.fake_out = self.netD(self.gen_imgs)
-        else:
-            self.fake_out = self.netD(self.gen_imgs, self.y_)
+    def get_output(self):
+        return self.output
 
-        self.loss_G_fake, self.loss_G_real = criterionG(self.fake_out, self.real_out) 
+    def backward_G(self, gen_data):
+        # pass D
+        real_out = self.netD(self.inputs)
+        fake_out = self.netD(gen_data)
+
+        self.loss_G_fake, self.loss_G_real = self.criterionG(fake_out, real_out) 
         self.loss_G = self.loss_G_fake + self.loss_G_real
         self.loss_G.backward() 
 
-    def backward_D(self):
+    def backward_D(self, gen_data):
         # pass D 
-        if not self.opt.gan_mode == 'conditional':
-            self.fake_out = self.netD(self.gen_imgs)
-            self.real_out = self.netD(self.real_imgs)
-        else:
-            self.fake_out = self.netD(self.gen_imgs, self.y_)
-            self.real_out = self.netD(self.real_imgs, self.targets)
+        real_out = self.netD(self.inputs)
+        fake_out = self.netD(gen_data)
 
-        self.loss_D_fake, self.loss_D_real = self.criterionD(self.fake_out, self.real_out) 
-        if self.opt.use_gp is True: 
-            self.loss_D_gp = cal_gradient_penalty(self.netD, self.real_imgs, self.gen_imgs, self.device, type='mixed', constant=1.0, lambda_gp=10.0)[0]
+        self.loss_D_fake, self.loss_D_real = self.criterionD(fake_out, real_out)
+        if self.opt.use_gp is True:
+            self.loss_D_gp = cal_gradient_penalty(
+                self.netD,
+                self.inputs['data'],
+                gen_data['data'],
+                self.device,
+                type='mixed',
+                constant=1.0,
+                lambda_gp=10.0,
+            )[0]
         else:
             self.loss_D_gp = 0.
 
         self.loss_D = self.loss_D_fake + self.loss_D_real + self.loss_D_gp
-        self.loss_D.backward() 
+        self.loss_D.backward()
 
     def optimize_parameters(self):
-        input_imgs, input_target = self.inputs['source'], self.inputs['target']
-        for i in range(self.opt.D_iters + 1):
-            self.real_imgs = input_imgs[i * self.opt.batch_size: (i+1) * self.opt.batch_size]
-            if self.opt.gan_mode == 'conditional':
-                self.targets = input_target[i * self.opt.batch_size:(i+1) * self.opt.batch_size]
-            # update G
-            if i == 0:
-                self.Fitness, self.evalimgs, self.evaly, self.sel_mut = self.Evo_G()
-                self.evalimgs = torch.cat(self.evalimgs, dim=0) 
-                self.evaly = torch.cat(self.evaly, dim=0) if self.opt.gan_mode == 'conditional' else None
-                shuffle_ids = torch.randperm(self.evalimgs.size()[0])
-                self.evalimgs = self.evalimgs[shuffle_ids]
-                self.evaly = self.evaly[shuffle_ids] if self.opt.gan_mode == 'conditional' else None
-            # update D
-            else: 
-                self.set_requires_grad(self.netD, True)
-                self.optimizer_D.zero_grad()
-                self.gen_imgs = self.evalimgs[(i - 1) * self.opt.batch_size: i * self.opt.batch_size].detach()
-                self.y_ = self.evaly[(i - 1) * self.opt.batch_size: i * self.opt.batch_size] if self.opt.gan_mode == 'conditional' else None
-                self.backward_D()
-                self.optimizer_D.step()
+        if self.step % (self.opt.D_iters + 1) == 0:
+            self.set_requires_grad(self.netD, False)
+            self.Evo_G()
+        else:
+            gen_data = self.forward()
+            self.set_requires_grad(self.netD, True)
+            self.optimizer_D.zero_grad()
+            self.backward_D(gen_data)
+            self.optimizer_D.step()
+
+        self.step += 1
 
     def Evo_G(self):
-        input_imgs, input_target = self.inputs['source'], self.inputs['target']
-        eval_imgs = input_imgs[-self.eval_size:]
-        eval_targets = input_target[-self.eval_size:] if self.opt.gan_mode == 'conditional' else None
+        '''
+        Enumerate candi_num*G_mutations to find the top 
+        candi_num network for fitness_score, self.netG will
+        be updated using the best network.
+        '''
+        
+        G_Net = collections.namedtuple("G_Net", "fitness G_candis optG_candis")
+        G_heap = MinHeap([G_Net(fitness=-float('inf'), G_candis=None, optG_candis=None) for i in range(self.opt.candi_num)])
 
-        # define real images pass D
-        self.real_out = self.netD(self.real_imgs) if not self.opt.gan_mode == 'conditional' else self.netD(self.real_imgs, self.targets)
-
-        F_list = np.zeros(self.opt.candi_num)
-        Fit_list = []  
-        G_list = [] 
-        optG_list = [] 
-        evalimg_list = [] 
-        evaly_list = [] 
-        selected_mutation = [] 
-        count = 0
         # variation-evaluation-selection
         for i in range(self.opt.candi_num):
-            for j, criterionG in enumerate(self.G_mutations): 
+            for criterionG in self.G_mutations: 
                 # Variation 
+                self.criterionG = criterionG
                 self.netG.load_state_dict(self.G_candis[i])
                 self.optimizer_G.load_state_dict(self.optG_candis[i])
                 self.optimizer_G.zero_grad()
-                self.gen_imgs, self.y_ = self.forward() 
-                self.set_requires_grad(self.netD, False)
-                self.backward_G(criterionG)
+                gen_data = self.forward() 
+                self.backward_G(gen_data)
                 self.optimizer_G.step()
-                # Evaluation 
-                with torch.no_grad(): 
-                    eval_fake_imgs, eval_fake_y = self.forward(batch_size=self.eval_size) 
-                Fq, Fd = self.fitness_score(eval_fake_imgs, eval_fake_y, eval_imgs, eval_targets) 
-                F = Fq + self.opt.lambda_f * Fd 
-                # Selection 
-                if count < self.opt.candi_num:
-                    F_list[count] = F
-                    Fit_list.append([Fq, Fd, F])  
-                    G_list.append(copy.deepcopy(self.netG.state_dict()))
-                    optG_list.append(copy.deepcopy(self.optimizer_G.state_dict()))
-                    evalimg_list.append(eval_fake_imgs)
-                    evaly_list.append(eval_fake_y)
-                    selected_mutation.append(self.opt.g_loss_mode[j]) 
-                else:
-                    fit_com = F - F_list
-                    if max(fit_com) > 0:
-                        ids_replace = np.where(fit_com==max(fit_com))[0][0]
-                        F_list[ids_replace] = F
-                        Fit_list[ids_replace] = [Fq, Fd, F] 
-                        G_list[ids_replace] = copy.deepcopy(self.netG.state_dict())
-                        optG_list[ids_replace] = copy.deepcopy(self.optimizer_G.state_dict())
-                        evalimg_list[ids_replace] = eval_fake_imgs
-                        evaly_list[ids_replace] = eval_fake_y
-                        selected_mutation[ids_replace] = self.opt.g_loss_mode[j]
-                count += 1
-        self.G_candis = copy.deepcopy(G_list)             
-        self.optG_candis = copy.deepcopy(optG_list)             
-        return np.array(Fit_list), evalimg_list, evaly_list, selected_mutation
+                self.orthogonalize(self.netG)
 
-    def fitness_score(self, eval_fake_imgs, eval_fake_y, eval_real_imgs, eval_real_y):
-        self.set_requires_grad(self.netD, True)
-        eval_fake = self.netD(eval_fake_imgs) if not self.opt.gan_mode == 'conditional' else self.netD(eval_fake_imgs, eval_fake_y)
-        eval_real = self.netD(eval_real_imgs) if not self.opt.gan_mode == 'conditional' else self.netD(eval_real_imgs, eval_real_y)
+                # Evaluation
+                with torch.no_grad():
+                    eval_data = self.forward()
+                fitness = self.fitness_score(eval_data)
+
+                # Selection
+                if fitness > G_heap.top().fitness:
+                    netG_dict = copy.deepcopy(self.netG.state_dict())
+                    optmizerG_dict = copy.deepcopy(self.optimizer_G.state_dict())
+                    G_heap.replace(G_Net(fitness=fitness, G_candis=netG_dict, optG_candis=optmizerG_dict))
+        
+        self.G_candis = [ net.G_candis for net in G_heap.array ]
+        self.optG_candis = [ net.optG_candis for net in G_heap.array ]
+
+        max_idx = G_heap.argmax()
+
+        self.netG.load_state_dict(self.G_candis[max_idx])
+        self.optimizer_G.load_state_dict(self.optG_candis[max_idx]) # not sure if loading is necessary
+
+    def fitness_score(self, eval_data):
+        '''
+        Evaluate netG based on netD 
+        '''
+        eval_fake = self.netD(eval_data)
 
         # Quality fitness score
         Fq = eval_fake.data.mean().cpu().numpy()
 
         # Diversity fitness score
-        eval_D_fake, eval_D_real = self.criterionD(eval_fake, eval_real) 
-        eval_D = eval_D_fake + eval_D_real
-        gradients = torch.autograd.grad(outputs=eval_D, inputs=self.netD.parameters(),
-                                        grad_outputs=torch.ones(eval_D.size()).to(self.device),
-                                        create_graph=True, retain_graph=True, only_inputs=True)
-        with torch.no_grad():
-            for i, grad in enumerate(gradients):
-                grad = grad.view(-1)
-                allgrad = grad if i == 0 else torch.cat([allgrad,grad]) 
-        Fd = torch.log(torch.norm(allgrad)).data.cpu().numpy()
-        return Fq, Fd 
+        # TODO
+        Fd = 0
 
+        return Fq + self.opt.lambda_f * Fd 
+
+    @staticmethod
+    def orthogonalize(generator, beta=0.001):
+        W = generator.module.layer.weight.data
+        W.copy_((1 + beta) * W - beta * W.mm(W.transpose(0, 1).mm(W)))
