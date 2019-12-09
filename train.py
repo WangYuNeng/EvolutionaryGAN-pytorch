@@ -57,7 +57,14 @@ if __name__ == '__main__':
 
             if total_iters % opt.display_freq == 0:
                 samples = model.get_output()
-                wandb.log({"samples": [wandb.Image(im) for im in samples]})
+                if opt.wandb:
+                    wandb.log(
+                        {
+                            "fake-samples": [wandb.Image((im + 1) / 2) for im in samples],
+                            "real-samples": [wandb.Image((im + 1) / 2) for im in data['data']],
+                        },
+                        step=total_iters,
+                    )
 
             if total_iters % opt.print_freq == 0:  # print training losses and save logging information to the disk
                 losses = model.get_current_losses()
@@ -71,7 +78,7 @@ if __name__ == '__main__':
                 print('iters: ', total_iters, end='')
                 print(json.dumps(scores, indent=4))
                 if opt.wandb:
-                    wandb.log(scores, total_iters)
+                    wandb.log(scores, step=total_iters)
 
             if total_iters % opt.save_latest_freq == 0:  # cache our latest model every <save_latest_freq> iterations
                 print('saving the latest model (epoch %d, iters %d)' % (epoch, total_iters))
