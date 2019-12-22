@@ -18,7 +18,6 @@ class TwoPlayerGANModel(BaseModel):
             parser.add_argument('--d_loss_mode', type=str, default='lsgan',
                                 help='lsgan | nsgan | vanilla | wgan | hinge | rsgan')
             parser.add_argument('--which_D', type=str, default='S', help='Standard(S) | Relativistic_average (Ra)')
-
         return parser
 
     def __init__(self, opt):
@@ -78,10 +77,10 @@ class TwoPlayerGANModel(BaseModel):
         real_out = self.netD(self.inputs)
         fake_out = self.netD(gen_data)
         self.loss_G_fake, self.loss_G_real = self.criterionG(fake_out, real_out)
-        if self.opt.dataset_mode == 'embedding':
+        if self.opt.dataset_mode == 'embedding' and not self.opt.exact_orthogonal:
             embedding_dim = gen_data['data'].shape[1]
             self.loss_G_orthogonal = torch.norm(
-                self.netG.module.layer.weight.data - torch.eye(embedding_dim, device=self.device)
+                self.netG.module.layer.data - torch.eye(embedding_dim, device=self.device)
             ) * 0.001
         else:
             self.loss_G_orthogonal = 0.

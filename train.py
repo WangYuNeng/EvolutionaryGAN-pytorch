@@ -55,7 +55,7 @@ if __name__ == '__main__':
             epoch_iter += 1
             total_iters += 1
 
-            if total_iters % opt.display_freq == 0:
+            if total_iters % opt.display_freq == 0 and opt.dataset_mode == 'torchvision':
                 samples = model.get_output()
                 if opt.wandb:
                     wandb.log(

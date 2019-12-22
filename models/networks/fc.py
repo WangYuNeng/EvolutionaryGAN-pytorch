@@ -6,16 +6,21 @@ from .expm import expm
 
 class FCGenerator(nn.Module):
 
-    def __init__(self, dim=300):
+    def __init__(self, dim=300, exact_orthogonal=False):
         super().__init__()
         self.layer = nn.Parameter(torch.zeros(size=(dim, dim)), requires_grad=True)
+        self.exact_orthogonal = exact_orthogonal
 
     def forward(self, x: dict):
         x = x['source']
-        triu = self.layer.triu()
-        skew_symmetric_matrix = triu - triu.t()
-        mapping = expm(skew_symmetric_matrix)
-        return x @ mapping
+        if self.exact_orthogonal:
+            triu = self.layer.triu()
+            skew_symmetric_matrix = triu - triu.t()
+            mapping = expm(skew_symmetric_matrix)
+            out = x @ mapping
+        else:
+            out = x @ self.layer
+        return out
 
 
 class FCDiscriminator(nn.Module):
