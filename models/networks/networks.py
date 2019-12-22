@@ -140,7 +140,7 @@ def define_G(opt, gpu_ids):
         )
     elif opt.netG == 'fc':
         from models.networks.fc import FCGenerator
-        net = FCGenerator()
+        net = FCGenerator(exact_orthogonal=opt.exact_orthogonal)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % opt.netG)
     return init_net(net, opt.init_type, opt.init_gain, gpu_ids)
