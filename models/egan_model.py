@@ -106,6 +106,8 @@ class EGANModel(BaseModel):
         for i in range(opt.candi_num): 
             self.G_candis.append(copy.deepcopy(self.netG.state_dict()))
             self.optG_candis.append(copy.deepcopy(self.optimizer_G.state_dict()))
+        self.loss_mode_to_idx = {loss_mode:i for i, loss_mode in enumerate(opt.g_loss_mode)}
+        self.current_loss_mode = None
 
 
     def forward(self) -> dict:
@@ -186,8 +188,8 @@ class EGANModel(BaseModel):
         be updated using the best network.
         '''
         
-        G_Net = collections.namedtuple("G_Net", "fitness G_candis optG_candis")
-        G_heap = MinHeap([G_Net(fitness=-float('inf'), G_candis=None, optG_candis=None) for i in range(self.opt.candi_num)])
+        G_Net = collections.namedtuple("G_Net", "fitness G_candis optG_candis loss_mode")
+        G_heap = MinHeap([G_Net(fitness=-float('inf'), G_candis=None, optG_candis=None, loss_mode=None) for i in range(self.opt.candi_num)])
 
         # variation-evaluation-selection
         for i in range(self.opt.candi_num):
@@ -211,7 +213,7 @@ class EGANModel(BaseModel):
                 if fitness > G_heap.top().fitness:
                     netG_dict = copy.deepcopy(self.netG.state_dict())
                     optmizerG_dict = copy.deepcopy(self.optimizer_G.state_dict())
-                    G_heap.replace(G_Net(fitness=fitness, G_candis=netG_dict, optG_candis=optmizerG_dict))
+                    G_heap.replace(G_Net(fitness=fitness, G_candis=netG_dict, optG_candis=optmizerG_dict, loss_mode=criterionG.loss_mode))
         
         self.G_candis = [ net.G_candis for net in G_heap.array ]
         self.optG_candis = [ net.optG_candis for net in G_heap.array ]
@@ -220,6 +222,7 @@ class EGANModel(BaseModel):
 
         self.netG.load_state_dict(self.G_candis[max_idx])
         self.optimizer_G.load_state_dict(self.optG_candis[max_idx]) # not sure if loading is necessary
+        self.current_loss_mode = self.loss_mode_to_idx[G_heap.array[max_idx].loss_mode]
 
     def fitness_score(self, eval_data):
         '''

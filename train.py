@@ -57,7 +57,7 @@ if __name__ == '__main__':
 
             if total_iters % opt.display_freq == 0:
                 samples = model.get_output()
-                if opt.wandb:
+                if opt.wandb and opt.dataset_mode=="torchvision":
                     wandb.log(
                         {
                             "fake-samples": [wandb.Image((im + 1) / 2) for im in samples],
@@ -72,6 +72,10 @@ if __name__ == '__main__':
                 print(json.dumps(losses, indent=4))
                 if opt.wandb:
                     wandb.log(losses, step=total_iters)
+                    if opt.model == "egan":
+                        print('loss_mode: ', model.current_loss_mode)
+                        wandb.log({"loss_mode": model.current_loss_mode}, step=total_iters)
+
 
             if total_iters % opt.score_freq == 0:  # print generation scores and save logging information to the disk
                 scores = evaluator.get_current_scores()
