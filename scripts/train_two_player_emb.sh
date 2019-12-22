@@ -17,3 +17,6 @@ python train.py --name lsgan_emb \
        --score_name muse-csls-en \
        --print_freq 2000 --display_freq 2000 --score_freq 10000 \
        --save_latest_freq 100000 --save_giters_freq 100000 --most_frequent 75000
+       # good hyper param for wgan
+       # --d_loss_mode wgan --g_loss_mode wgan --which_D S --use_gp \
+       # --optim_type Adam --lr_g 0.001 --lr_d 0.001 \ 

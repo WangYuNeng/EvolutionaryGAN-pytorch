@@ -79,7 +79,7 @@ class TwoPlayerGANModel(BaseModel):
         self.loss_G_fake, self.loss_G_real = self.criterionG(fake_out, real_out)
         if self.opt.dataset_mode == 'embedding':
             embedding_dim = gen_data['data'].shape[1]
-            self.loss_G_orthogonal = torch.norm(self.netG.module.layer.weight.data - torch.eye(embedding_dim)) * 0.001
+            self.loss_G_orthogonal = torch.norm(self.netG.module.layer.weight.data - torch.eye(embedding_dim).cuda()) * 0.001
         else:
             self.loss_G_orthogonal = 0.
         self.loss_G = self.loss_G_fake + self.loss_G_real + self.loss_G_orthogonal
