@@ -79,9 +79,10 @@ class TwoPlayerGANModel(BaseModel):
         self.loss_G_fake, self.loss_G_real = self.criterionG(fake_out, real_out)
         if self.opt.dataset_mode == 'embedding' and not self.opt.exact_orthogonal:
             embedding_dim = gen_data['data'].shape[1]
-            self.loss_G_orthogonal = torch.norm(
-                self.netG.module.layer.data - torch.eye(embedding_dim, device=self.device)
-            ) * 0.001
+            weight = self.netG.module.layer.data
+            self.loss_G_orthogonal = (
+                    (weight.T @ weight) - torch.eye(embedding_dim, device=self.device)
+            ).norm()
         else:
             self.loss_G_orthogonal = 0.
         self.loss_G = self.loss_G_fake + self.loss_G_real + self.loss_G_orthogonal
