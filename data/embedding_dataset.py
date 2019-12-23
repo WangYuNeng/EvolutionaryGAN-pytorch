@@ -39,7 +39,8 @@ class EmbeddingDataset(BaseDataset):
                             help='name of imported dataset, options: [cbow, fasttext]')
         parser.add_argument('--target_dataset_name', type=str, default='cbow',
                             help='name of imported dataset, options: [cbow, fasttext]')
-        parser.add_argument('--exact_orthogonal', action='store_true')
+        parser.add_argument('--exact_orthogonal', type=str, default=None)
+        parser.add_argument('--reflection', action='store_true')
         return parser
 
     def __init__(self, opt):

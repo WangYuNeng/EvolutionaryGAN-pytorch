@@ -6,23 +6,32 @@ from .expm import expm
 
 class FCGenerator(nn.Module):
 
-    def __init__(self, dim=300, exact_orthogonal=False):
+    def __init__(self, dim=300, exact_orthogonal=False, reflection=False):
         super().__init__()
         self.dim = dim
+        self.reflection = reflection
         self.layer = nn.Parameter(torch.zeros(size=(dim, dim)), requires_grad=True)
         self.exact_orthogonal = exact_orthogonal
 
     def forward(self, x: dict):
         x = x['source']
-        if self.exact_orthogonal:
+        if self.exact_orthogonal == 'expm':
             triu = self.layer.triu()
             skew = triu - triu.t()
-            # mapping = expm(skew)
+            mapping = expm(skew)
+        elif self.exact_orthogonal == 'cayley':
+            triu = self.layer.triu()
+            skew = triu - triu.t()
             I = torch.eye(self.dim, device=self.layer.device)
             mapping = (I - skew) @ (I + skew).inverse()
-            out = x @ mapping
         else:
-            out = x @ self.layer
+            assert not self.reflection
+            mapping = self.layer
+
+        if self.reflection:
+            mapping[0] *= -1
+
+        out = x @ mapping
         return out
 
 
