@@ -74,7 +74,7 @@ class EGANModel(BaseModel):
         """
         BaseModel.__init__(self, opt)  # call the initialization method of BaseModel
         self.output = None
-        self.loss_names = ['G_real', 'G_fake', 'D_real', 'D_fake', 'D_gp', 'G', 'D']
+        self.loss_names = ['G_real', 'G_fake', 'G_orthogonal', 'D_real', 'D_fake', 'D_gp', 'G', 'D']
         self.visual_names = ['real_visual', 'gen_visual']
 
         if self.isTrain:  # only defined during training time
@@ -142,9 +142,19 @@ class EGANModel(BaseModel):
         real_out = self.netD(self.inputs)
         fake_out = self.netD(gen_data)
 
-        self.loss_G_fake, self.loss_G_real = self.criterionG(fake_out, real_out) 
-        self.loss_G = self.loss_G_fake + self.loss_G_real
-        self.loss_G.backward() 
+        loss_G_fake, loss_G_real = self.criterionG(fake_out, real_out) 
+        if self.opt.dataset_mode == 'embedding' and not self.opt.exact_orthogonal:
+            embedding_dim = gen_data['data'].shape[1]
+            weight = self.netG.module.layer.data
+            loss_G_orthogonal = (
+                    (weight.T @ weight) - torch.eye(embedding_dim, device=self.device)
+            ).norm()
+        else:
+            loss_G_orthogonal = 0.
+        loss_G = loss_G_fake + loss_G_real + loss_G_orthogonal
+        loss_G.backward()
+
+        return loss_G, loss_G_fake, loss_G_real, loss_G_orthogonal 
 
     def backward_D(self, gen_data):
         # pass D 
@@ -188,8 +198,8 @@ class EGANModel(BaseModel):
         be updated using the best network.
         '''
         
-        G_Net = collections.namedtuple("G_Net", "fitness G_candis optG_candis loss_mode")
-        G_heap = MinHeap([G_Net(fitness=-float('inf'), G_candis=None, optG_candis=None, loss_mode=None) for i in range(self.opt.candi_num)])
+        G_Net = collections.namedtuple("G_Net", "fitness G_candis optG_candis loss_mode loss_G loss_G_fake loss_G_real loss_G_orthogonal")
+        G_heap = MinHeap([G_Net(fitness=-float('inf'), G_candis=None, optG_candis=None, loss_mode=None, loss_G=None, loss_G_fake=None, loss_G_real=None, loss_G_orthogonal=None) for i in range(self.opt.candi_num)])
 
         # variation-evaluation-selection
         for i in range(self.opt.candi_num):
@@ -200,9 +210,8 @@ class EGANModel(BaseModel):
                 self.optimizer_G.load_state_dict(self.optG_candis[i])
                 self.optimizer_G.zero_grad()
                 gen_data = self.forward() 
-                self.backward_G(gen_data)
+                loss_G, loss_G_fake, loss_G_real, loss_G_orthogonal = self.backward_G(gen_data)
                 self.optimizer_G.step()
-                self.orthogonalize(self.netG)
 
                 # Evaluation
                 with torch.no_grad():
@@ -213,7 +222,7 @@ class EGANModel(BaseModel):
                 if fitness > G_heap.top().fitness:
                     netG_dict = copy.deepcopy(self.netG.state_dict())
                     optmizerG_dict = copy.deepcopy(self.optimizer_G.state_dict())
-                    G_heap.replace(G_Net(fitness=fitness, G_candis=netG_dict, optG_candis=optmizerG_dict, loss_mode=criterionG.loss_mode))
+                    G_heap.replace(G_Net(fitness=fitness, G_candis=netG_dict, optG_candis=optmizerG_dict, loss_mode=criterionG.loss_mode, loss_G=loss_G, loss_G_fake=loss_G_fake, loss_G_real=loss_G_real, loss_G_orthogonal=loss_G_orthogonal))
         
         self.G_candis = [ net.G_candis for net in G_heap.array ]
         self.optG_candis = [ net.optG_candis for net in G_heap.array ]
@@ -223,6 +232,7 @@ class EGANModel(BaseModel):
         self.netG.load_state_dict(self.G_candis[max_idx])
         self.optimizer_G.load_state_dict(self.optG_candis[max_idx]) # not sure if loading is necessary
         self.current_loss_mode = self.loss_mode_to_idx[G_heap.array[max_idx].loss_mode]
+        self.loss_G, self.loss_G_fake, self.loss_G_real, self.loss_G_orthogonal = G_heap.array[max_idx].loss_G, G_heap.array[max_idx].loss_G_fake, G_heap.array[max_idx].loss_G_real, G_heap.array[max_idx].loss_G_orthogonal 
 
     def fitness_score(self, eval_data):
         '''
@@ -239,7 +249,3 @@ class EGANModel(BaseModel):
 
         return Fq + self.opt.lambda_f * Fd 
 
-    @staticmethod
-    def orthogonalize(generator, beta=0.001):
-        W = generator.module.layer.weight.data
-        W.copy_((1 + beta) * W - beta * W.mm(W.transpose(0, 1).mm(W)))
