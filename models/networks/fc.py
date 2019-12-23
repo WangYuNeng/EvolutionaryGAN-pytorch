@@ -8,6 +8,7 @@ class FCGenerator(nn.Module):
 
     def __init__(self, dim=300, exact_orthogonal=False):
         super().__init__()
+        self.dim = dim
         self.layer = nn.Parameter(torch.zeros(size=(dim, dim)), requires_grad=True)
         self.exact_orthogonal = exact_orthogonal
 
@@ -15,8 +16,10 @@ class FCGenerator(nn.Module):
         x = x['source']
         if self.exact_orthogonal:
             triu = self.layer.triu()
-            skew_symmetric_matrix = triu - triu.t()
-            mapping = expm(skew_symmetric_matrix)
+            skew = triu - triu.t()
+            # mapping = expm(skew)
+            I = torch.eye(self.dim, device=self.layer.device)
+            mapping = (I - skew) @ (I + skew).inverse()
             out = x @ mapping
         else:
             out = x @ self.layer
