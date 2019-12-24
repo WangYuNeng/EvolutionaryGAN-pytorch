@@ -73,7 +73,6 @@ if __name__ == '__main__':
                 if opt.wandb:
                     wandb.log(losses, step=total_iters)
 
-
             if total_iters % opt.score_freq == 0:  # print generation scores and save logging information to the disk
                 scores = evaluator.get_current_scores()
                 print('iters: ', total_iters, end='')

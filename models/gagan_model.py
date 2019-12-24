@@ -118,10 +118,10 @@ class GAGANModel(BaseModel):
         loss_G.backward()
 
         return {
-            'loss': loss_G,
-            'fake_loss': loss_G_fake,
-            'real_loss': loss_G_real,
-            'orthogonal_loss': loss_G_orthogonal,
+            '': loss_G,
+            'fake': loss_G_fake,
+            'real': loss_G_real,
+            'orthogonal': loss_G_orthogonal,
             'mode': criterion.loss_mode,
         }
 
@@ -151,7 +151,7 @@ class GAGANModel(BaseModel):
         if self.step % (self.opt.D_iters + 1) == 0:
             self.set_requires_grad(self.netD, False)
             self.Evo_G(self.G_candis, self.optG_candis)
-            self.crossover()
+            self.crossover(self.G_candis)
         else:
             gen_data = self.forward()
             self.set_requires_grad(self.netD, True)
@@ -187,7 +187,7 @@ class GAGANModel(BaseModel):
             for criterionG in self.G_mutations:
                 # Variation 
                 self.netG.load_state_dict(G_candi)
-                self.optimizer_G.load_state_dict(optG_candis)
+                self.optimizer_G.load_state_dict(optG_candi)
                 self.optimizer_G.zero_grad()
                 gen_data = self.forward()
                 G_losses = self.backward_G(gen_data, criterionG)
@@ -215,7 +215,7 @@ class GAGANModel(BaseModel):
         self.optimizer_G.load_state_dict(self.optG_candis[max_idx])  # not sure if loading is necessary
         self.loss_G = G_heap.array[max_idx].losses
 
-    def crossover(self):
+    def crossover(self, G_candis):
         """
         crossover nets
         """
@@ -230,5 +230,4 @@ class GAGANModel(BaseModel):
 
         # Quality fitness score
         Fq = eval_fake.data.mean().cpu().numpy()
-
         return Fq
