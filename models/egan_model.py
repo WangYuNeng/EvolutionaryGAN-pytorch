@@ -74,7 +74,7 @@ class EGANModel(BaseModel):
         """
         BaseModel.__init__(self, opt)  # call the initialization method of BaseModel
         self.output = None
-        self.loss_names = ['G_real', 'G_fake', 'G_orthogonal', 'D_real', 'D_fake', 'D_gp', 'G', 'D']
+        self.loss_names = ['G_real', 'G_fake', 'G_orthogonal', 'D_real', 'D_fake', 'D_gp', 'G', 'D', 'mode']
         self.visual_names = ['real_visual', 'gen_visual']
 
         if self.isTrain:  # only defined during training time
@@ -231,7 +231,7 @@ class EGANModel(BaseModel):
 
         self.netG.load_state_dict(self.G_candis[max_idx])
         self.optimizer_G.load_state_dict(self.optG_candis[max_idx]) # not sure if loading is necessary
-        self.current_loss_mode = self.loss_mode_to_idx[G_heap.array[max_idx].loss_mode]
+        self.loss_mode = self.loss_mode_to_idx[G_heap.array[max_idx].loss_mode]
         self.loss_G, self.loss_G_fake, self.loss_G_real, self.loss_G_orthogonal = G_heap.array[max_idx].loss_G, G_heap.array[max_idx].loss_G_fake, G_heap.array[max_idx].loss_G_real, G_heap.array[max_idx].loss_G_orthogonal 
 
     def fitness_score(self, eval_data):
