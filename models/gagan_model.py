@@ -55,9 +55,10 @@ class GAGANModel(BaseModel):
             # define loss functions
             self.criterionD = GANLoss(opt.d_loss_mode, 'D', opt.which_D).to(self.device)
             # define G mutations 
-            self.G_mutations = []
-            for g_loss in opt.g_loss_mode:
-                self.G_mutations.append(GANLoss(g_loss, 'G', opt.which_D).to(self.device))
+            self.G_mutations = [
+                GANLoss(g_loss, 'G', opt.which_D).to(self.device)
+                for g_loss in opt.g_loss_mode
+            ]
             # initialize optimizers
             self.optimizer_G = get_optimizer(opt.optim_type)(self.netG.parameters(), lr=opt.lr_g)
             self.optimizer_D = get_optimizer(opt.optim_type)(self.netD.parameters(), lr=opt.lr_d)
@@ -65,11 +66,8 @@ class GAGANModel(BaseModel):
             self.optimizers.append(self.optimizer_D)
 
         # Evolutionary candidatures setting (init)
-        self.G_candis = []
-        self.optG_candis = []
-        for i in range(opt.candi_num):
-            self.G_candis.append(copy.deepcopy(self.netG.state_dict()))
-            self.optG_candis.append(copy.deepcopy(self.optimizer_G.state_dict()))
+        self.G_candis = [copy.deepcopy(self.netG.state_dict())] * opt.candi_num
+        self.optG_candis = [copy.deepcopy(self.optimizer_G.state_dict())] * opt.candi_num
         self.loss_mode_to_idx = {loss_mode: i for i, loss_mode in enumerate(opt.g_loss_mode)}
         self.current_loss_mode = None
 
@@ -100,7 +98,7 @@ class GAGANModel(BaseModel):
     def get_output(self):
         return self.output
 
-    def backward_G(self, gen_data, criterion):
+    def backward_G(self, gen_data, criterion) -> dict:
         # pass D
         real_out = self.netD(self.inputs)
         fake_out = self.netD(gen_data)
@@ -194,9 +192,7 @@ class GAGANModel(BaseModel):
                 self.optimizer_G.step()
 
                 # Evaluation
-                with torch.no_grad():
-                    eval_data = self.forward()
-                fitness = self.fitness_score(eval_data)
+                fitness = self.fitness_score()
 
                 # Selection
                 if fitness > G_heap.top().fitness:
@@ -222,10 +218,12 @@ class GAGANModel(BaseModel):
         # TODO
         pass
 
-    def fitness_score(self, eval_data):
+    def fitness_score(self):
         """
         Evaluate netG based on netD
         """
+        with torch.no_grad():
+            eval_data = self.forward()
         eval_fake = self.netD(eval_data)
 
         # Quality fitness score
