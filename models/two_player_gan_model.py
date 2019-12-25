@@ -23,7 +23,7 @@ class TwoPlayerGANModel(BaseModel):
     def __init__(self, opt):
         BaseModel.__init__(self, opt)
         self.output = None
-        self.loss_names = ['G_real', 'G_fake', 'G_orthogonal', 'D_real', 'D_fake', 'D_gp', 'G', 'D']
+        self.loss_names = ['G_real', 'G_fake', 'D_real', 'D_fake', 'D_gp', 'G', 'D']
 
         if self.isTrain:  # only defined during training time
             self.model_names = ['G', 'D']
@@ -77,15 +77,7 @@ class TwoPlayerGANModel(BaseModel):
         real_out = self.netD(self.inputs)
         fake_out = self.netD(gen_data)
         self.loss_G_fake, self.loss_G_real = self.criterionG(fake_out, real_out)
-        if self.opt.dataset_mode == 'embedding' and not self.opt.exact_orthogonal:
-            embedding_dim = gen_data['data'].shape[1]
-            weight = self.netG.module.layer.data
-            self.loss_G_orthogonal = (
-                    (weight.T @ weight) - torch.eye(embedding_dim, device=self.device)
-            ).norm()
-        else:
-            self.loss_G_orthogonal = 0.
-        self.loss_G = self.loss_G_fake + self.loss_G_real + self.loss_G_orthogonal
+        self.loss_G = self.loss_G_fake + self.loss_G_real
         self.loss_G.backward()
 
     def backward_D(self, gen_data):
@@ -117,6 +109,8 @@ class TwoPlayerGANModel(BaseModel):
             self.optimizer_G.zero_grad()
             self.backward_G(gen_data)
             self.optimizer_G.step()
+            if self.opt.dataset_mode == 'embedding' and not self.opt.exact_orthogonal:
+                self.orthogonalize(self.netG)
         else:
             self.set_requires_grad(self.netD, True)
             self.optimizer_D.zero_grad()

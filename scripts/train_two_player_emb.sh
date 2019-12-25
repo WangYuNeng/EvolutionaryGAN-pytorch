@@ -9,7 +9,7 @@ python train.py --name lsgan_emb \
        --model two_player_gan --gan_mode unconditional \
        --gpu_ids 0 \
        --d_loss_mode vanilla --g_loss_mode vanilla --which_D S \
-       --optim_type SGD --lr_g 0.1 --lr_d 0.1 \
+       --optim_type Adam --lr_g 0.001 --lr_d 0.001 \
        --netD fc --netG fc --ngf 128 --ndf 128 --g_norm none --d_norm none \
        --init_type diagonal --init_gain 0.02 \
        --no_dropout --no_flip \

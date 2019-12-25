@@ -228,3 +228,7 @@ class BaseModel(ABC):
             if net is not None:
                 for param in net.parameters():
                     param.requires_grad = requires_grad
+    @staticmethod
+    def orthogonalize(generator, beta=0.001):
+        W = generator.module.layer.data
+        W.copy_((1 + beta) * W - beta * W.mm(W.transpose(0, 1).mm(W)))
