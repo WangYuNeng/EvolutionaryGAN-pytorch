@@ -121,9 +121,24 @@ class BaseModel(ABC):
         errors_ret = OrderedDict()
         for name in self.loss_names:
             if isinstance(name, str):
-                errors_ret[name] = float(
-                    getattr(self, 'loss_' + name))  # float(...) works for both scalar tensor and float number
+                attribute = getattr(self, 'loss_' + name)
+                if isinstance(attribute, (float, int, torch.Tensor)):
+                    errors_ret[name] = self.convert_to_loggable(attribute)
+                elif isinstance(attribute, dict):
+                    for key, value in attribute.items():
+                        errors_ret[f'{name}_{key}'] = self.convert_to_loggable(value)
+                else:
+                    raise ValueError('unsupported loss type')
         return errors_ret
+
+    @staticmethod
+    def convert_to_loggable(x):
+        if isinstance(x, (float, int, torch.Tensor)):
+            return float(x)
+        elif isinstance(x, str):
+            return x
+        else:
+            raise ValueError('unsupported type')
 
     def save_networks(self, epoch):
         """Save all the networks to the disk.
