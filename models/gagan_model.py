@@ -1,7 +1,6 @@
 import copy
 import random
 
-import numpy as np
 import torch
 
 from .base_model import BaseModel
@@ -27,21 +26,20 @@ class GAGANModel(BaseModel):
             parser.add_argument(
                 '--g_loss_mode',
                 nargs='*',
-                default=['nsgan', 'lsgan', 'vanilla'],
+                default=['vanilla'],
                 help='lsgan | nsgan | vanilla | wgan | hinge | rsgan',
             )
             parser.add_argument(
                 '--d_loss_mode',
                 type=str,
-                default='lsgan',
+                default='vanilla',
                 help='lsgan | nsgan | vanilla | wgan | hinge | rsgan',
             )
             parser.add_argument('--which_D', type=str, default='S', help='Standard(S) | Relativistic_average (Ra)')
 
-            parser.add_argument('--lambda_f', type=float, default=0.1, help='the hyperparameter that balance Fq and Fd')
+            parser.add_argument('--lambda_f', type=float, default=0.1, help='the hyper-parameter that balance Fq and Fd')
             parser.add_argument('--candi_num', type=int, default=2,
                                 help='# of survived candidatures in each evolutionary iteration.')
-            parser.add_argument('--eval_size', type=int, default=64, help='batch size during each evaluation.')
         return parser
 
     def __init__(self, opt):
@@ -76,8 +74,6 @@ class GAGANModel(BaseModel):
         # Evolutionary candidatures setting (init)
         self.G_candis = [copy.deepcopy(self.netG.state_dict())] * opt.candi_num
         self.optG_candis = [copy.deepcopy(self.optimizer_G.state_dict())] * opt.candi_num
-        self.loss_mode_to_idx = {loss_mode: i for i, loss_mode in enumerate(opt.g_loss_mode)}
-        self.current_loss_mode = None
 
     def forward(self) -> dict:
         batch_size = self.opt.batch_size
@@ -115,7 +111,7 @@ class GAGANModel(BaseModel):
         if self.opt.dataset_mode == 'embedding' and not self.opt.exact_orthogonal:
             embedding_dim = gen_data['data'].shape[1]
             weight = self.netG.module.layer.data
-            loss_G_orthogonal = (
+            loss_G_orthogonal = 0.001 / 2 * (
                 (weight.T @ weight) - torch.eye(embedding_dim, device=self.device)
             ).norm()
         else:
@@ -157,7 +153,8 @@ class GAGANModel(BaseModel):
         if self.step % (self.opt.D_iters + 1) == 0:
             self.set_requires_grad(self.netD, False)
             self.G_candis, self.opt_G_candis, self.loss_G = self.Evo_G(self.G_candis, self.optG_candis)
-            self.G_candis, self.opt_G_candis = self.crossover(self.G_candis, self.optG_candis)
+            self.G_candis, self.opt_G_candis, xo_success_rate = self.crossover(self.G_candis, self.optG_candis)
+            self.loss_G = {'xo_success_rate': xo_success_rate, **self.loss_G}
         else:
             gen_data = self.forward()
             self.set_requires_grad(self.netD, True)
@@ -218,10 +215,13 @@ class GAGANModel(BaseModel):
         for G_candi, optG_candi in zip(G_candis, optG_candis):
             self.netG.load_state_dict(G_candi)
             fitness = self.fitness_score()
-            G_heap.replace(
-                G_Net(fitness=fitness, G_candis=G_candi, optG_candis=optG_candi, losses=None)
-            )
+            if fitness > G_heap.top().fitness:
+                G_heap.replace(
+                    G_Net(fitness=fitness, G_candis=G_candi, optG_candis=optG_candi, losses=None)
+                )
         SO_mappings, non_SO_mappings, SO_optG, non_SO_optG = categorize_mappings(G_candis, optG_candis)
+
+        xo_total_count, xo_success_count = 0, 0
         for networks, optimizers, is_SO in zip(
             [SO_mappings, non_SO_mappings],
             [SO_optG, non_SO_optG],
@@ -235,16 +235,19 @@ class GAGANModel(BaseModel):
                 optG_child = random.choice(optGs)
                 self.netG.load_state_dict(G_child)
                 fitness = self.fitness_score()
-                G_heap.replace(
-                    G_Net(fitness=fitness, G_candis=G_child, optG_candis=optG_child, losses=None)
-                )
+                if fitness > G_heap.top().fitness:
+                    G_heap.replace(
+                        G_Net(fitness=fitness, G_candis=G_child, optG_candis=optG_child, losses=None)
+                    )
+                    xo_success_count += 1
+                xo_total_count += 1
 
         G_candis = [net.G_candis for net in G_heap.array]
         optG_candis = [net.optG_candis for net in G_heap.array]
         max_idx = G_heap.argmax()
         self.netG.load_state_dict(G_candis[max_idx])
         self.optimizer_G.load_state_dict(optG_candis[max_idx])  # not sure if loading is necessary
-        return G_candis, optG_candis
+        return G_candis, optG_candis, xo_success_count / xo_total_count
 
     def fitness_score(self):
         """
@@ -255,5 +258,5 @@ class GAGANModel(BaseModel):
         eval_fake = self.netD(eval_data)
 
         # Quality fitness score
-        Fq = eval_fake.data.mean().cpu().numpy()
+        Fq = eval_fake.data.mean().item()
         return Fq
