@@ -190,7 +190,7 @@ class EGANModel(BaseModel):
         be updated using the best network.
         '''
         
-        G_Net = collections.namedtuple("G_Net", "fitness G_candis optG_candis loss_mode loss_G loss_G_fake loss_G_real")
+        G_Net = collections.namedtuple("G_Net", "fitness G_candis optG_candis loss_mode loss_G loss_G_fake loss_G_real loss_G_orthogonal")
         G_heap = MinHeap([G_Net(fitness=-float('inf'), G_candis=None, optG_candis=None, loss_mode=None, loss_G=None, loss_G_fake=None, loss_G_real=None) for i in range(self.opt.candi_num)])
 
         # variation-evaluation-selection
