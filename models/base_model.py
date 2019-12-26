@@ -126,7 +126,11 @@ class BaseModel(ABC):
                     errors_ret[name] = self.convert_to_loggable(attribute)
                 elif isinstance(attribute, dict):
                     for key, value in attribute.items():
-                        errors_ret[f'{name}_{key}'] = self.convert_to_loggable(value)
+                        if key != "":
+                            name_key = f'{name}_{key}'
+                        else: # format the name to align with the old ones ("G" not "G_")
+                            name_key = f'{name}'
+                        errors_ret[name_key] = self.convert_to_loggable(value)
                 else:
                     raise ValueError('unsupported loss type')
         return errors_ret
