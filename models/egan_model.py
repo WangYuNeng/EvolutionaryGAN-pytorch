@@ -25,7 +25,6 @@ from util.minheap import MinHeap
 from .optimizers import get_optimizer
 
 import copy 
-import math 
 import collections
 
 
@@ -189,7 +188,7 @@ class EGANModel(BaseModel):
         candi_num network for fitness_score, self.netG will
         be updated using the best network.
         '''
-        
+
         G_Net = collections.namedtuple("G_Net", "fitness G_candis optG_candis loss_mode loss_G loss_G_fake loss_G_real loss_G_orthogonal")
         G_heap = MinHeap([G_Net(fitness=-float('inf'), G_candis=None, optG_candis=None, loss_mode=None, loss_G=None, loss_G_fake=None, loss_G_real=None) for i in range(self.opt.candi_num)])
 

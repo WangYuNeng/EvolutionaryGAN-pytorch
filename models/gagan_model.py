@@ -1,14 +1,21 @@
+import copy
+import random
+
 import torch
+
 from .base_model import BaseModel
+from .utils import (
+    get_G_heap,
+    G_Net,
+    combine_mapping_networks,
+    categorize_mappings,
+    coshuffle,
+)
+from .optimizers import get_optimizer
 from models.networks import networks
 from models.networks.loss import GANLoss, cal_gradient_penalty
 from models.networks.utils import get_prior
 from util.util import one_hot
-from util.minheap import MinHeap
-from .optimizers import get_optimizer
-
-import copy
-import collections
 
 
 class GAGANModel(BaseModel):
@@ -19,21 +26,20 @@ class GAGANModel(BaseModel):
             parser.add_argument(
                 '--g_loss_mode',
                 nargs='*',
-                default=['nsgan', 'lsgan', 'vanilla'],
+                default=['vanilla'],
                 help='lsgan | nsgan | vanilla | wgan | hinge | rsgan',
             )
             parser.add_argument(
                 '--d_loss_mode',
                 type=str,
-                default='lsgan',
+                default='vanilla',
                 help='lsgan | nsgan | vanilla | wgan | hinge | rsgan',
             )
             parser.add_argument('--which_D', type=str, default='S', help='Standard(S) | Relativistic_average (Ra)')
 
-            parser.add_argument('--lambda_f', type=float, default=0.1, help='the hyperparameter that balance Fq and Fd')
+            parser.add_argument('--lambda_f', type=float, default=0.1, help='the hyper-parameter that balance Fq and Fd')
             parser.add_argument('--candi_num', type=int, default=2,
-                                help='# of survived candidatures in each evolutinary iteration.')
-            parser.add_argument('--eval_size', type=int, default=64, help='batch size during each evaluation.')
+                                help='# of survived candidatures in each evolutionary iteration.')
         return parser
 
     def __init__(self, opt):
@@ -68,8 +74,6 @@ class GAGANModel(BaseModel):
         # Evolutionary candidatures setting (init)
         self.G_candis = [copy.deepcopy(self.netG.state_dict())] * opt.candi_num
         self.optG_candis = [copy.deepcopy(self.optimizer_G.state_dict())] * opt.candi_num
-        self.loss_mode_to_idx = {loss_mode: i for i, loss_mode in enumerate(opt.g_loss_mode)}
-        self.current_loss_mode = None
 
     def forward(self) -> dict:
         batch_size = self.opt.batch_size
@@ -107,7 +111,7 @@ class GAGANModel(BaseModel):
         if self.opt.dataset_mode == 'embedding' and not self.opt.exact_orthogonal:
             embedding_dim = gen_data['data'].shape[1]
             weight = self.netG.module.layer.data
-            loss_G_orthogonal = (
+            loss_G_orthogonal = 0.001 / 2 * (
                 (weight.T @ weight) - torch.eye(embedding_dim, device=self.device)
             ).norm()
         else:
@@ -148,8 +152,9 @@ class GAGANModel(BaseModel):
     def optimize_parameters(self):
         if self.step % (self.opt.D_iters + 1) == 0:
             self.set_requires_grad(self.netD, False)
-            self.Evo_G(self.G_candis, self.optG_candis)
-            self.crossover(self.G_candis)
+            self.G_candis, self.opt_G_candis, self.loss_G = self.Evo_G(self.G_candis, self.optG_candis)
+            self.G_candis, self.opt_G_candis, xo_success_rate = self.crossover(self.G_candis, self.optG_candis)
+            self.loss_G = {'xo_success_rate': xo_success_rate, **self.loss_G}
         else:
             gen_data = self.forward()
             self.set_requires_grad(self.netD, True)
@@ -166,19 +171,7 @@ class GAGANModel(BaseModel):
         be updated using the best network.
         """
 
-        G_Net = collections.namedtuple(
-            "G_Net",
-            "fitness G_candis optG_candis losses",
-        )
-        G_heap = MinHeap([
-            G_Net(
-                fitness=-float('inf'),
-                G_candis=None,
-                optG_candis=None,
-                losses=None,
-            )
-            for _ in range(self.opt.candi_num)
-        ])
+        G_heap = get_G_heap(self.opt.candi_num)
 
         # variation-evaluation-selection
         for G_candi, optG_candi in zip(G_candis, optG_candis):
@@ -197,26 +190,64 @@ class GAGANModel(BaseModel):
                 # Selection
                 if fitness > G_heap.top().fitness:
                     netG_dict = copy.deepcopy(self.netG.state_dict())
-                    optmizerG_dict = copy.deepcopy(self.optimizer_G.state_dict())
+                    optimizerG_dict = copy.deepcopy(self.optimizer_G.state_dict())
                     G_heap.replace(
-                        G_Net(fitness=fitness, G_candis=netG_dict, optG_candis=optmizerG_dict, losses=G_losses)
+                        G_Net(fitness=fitness, G_candis=netG_dict, optG_candis=optimizerG_dict, losses=G_losses)
                     )
 
-        self.G_candis = [net.G_candis for net in G_heap.array]
-        self.optG_candis = [net.optG_candis for net in G_heap.array]
+        G_candis = [net.G_candis for net in G_heap.array]
+        optG_candis = [net.optG_candis for net in G_heap.array]
 
         max_idx = G_heap.argmax()
 
-        self.netG.load_state_dict(self.G_candis[max_idx])
-        self.optimizer_G.load_state_dict(self.optG_candis[max_idx])  # not sure if loading is necessary
-        self.loss_G = G_heap.array[max_idx].losses
+        self.netG.load_state_dict(G_candis[max_idx])
+        # self.optimizer_G.load_state_dict(optG_candis[max_idx])  # not sure if loading is necessary
+        loss_G = G_heap.array[max_idx].losses
+        return G_candis, optG_candis, loss_G
 
-    def crossover(self, G_candis):
+    def crossover(self, G_candis: list, optG_candis: list):
         """
         crossover nets
         """
-        # TODO
-        pass
+        G_candis, optG_candis = coshuffle(G_candis, optG_candis)
+        G_heap = get_G_heap(self.opt.candi_num)
+
+        for G_candi, optG_candi in zip(G_candis, optG_candis):
+            self.netG.load_state_dict(G_candi)
+            fitness = self.fitness_score()
+            if fitness > G_heap.top().fitness:
+                G_heap.replace(
+                    G_Net(fitness=fitness, G_candis=G_candi, optG_candis=optG_candi, losses=None)
+                )
+        SO_mappings, non_SO_mappings, SO_optG, non_SO_optG = categorize_mappings(G_candis, optG_candis)
+
+        xo_total_count, xo_success_count = 0, 0
+        for networks, optimizers, is_SO in zip(
+            [SO_mappings, non_SO_mappings],
+            [SO_optG, non_SO_optG],
+            [True, False]
+        ):
+            for (G_candi_1, G_candi_2), optGs in zip(
+                zip(networks[::2], networks[1::2]),
+                zip(optimizers[::2], optimizers[1::2]),
+            ):
+                G_child = combine_mapping_networks(G_candi_1, G_candi_2, is_SO=is_SO)
+                optG_child = random.choice(optGs)
+                self.netG.load_state_dict(G_child)
+                fitness = self.fitness_score()
+                if fitness > G_heap.top().fitness:
+                    G_heap.replace(
+                        G_Net(fitness=fitness, G_candis=G_child, optG_candis=optG_child, losses=None)
+                    )
+                    xo_success_count += 1
+                xo_total_count += 1
+
+        G_candis = [net.G_candis for net in G_heap.array]
+        optG_candis = [net.optG_candis for net in G_heap.array]
+        max_idx = G_heap.argmax()
+        self.netG.load_state_dict(G_candis[max_idx])
+        self.optimizer_G.load_state_dict(optG_candis[max_idx])  # not sure if loading is necessary
+        return G_candis, optG_candis, xo_success_count / xo_total_count
 
     def fitness_score(self):
         """
@@ -227,5 +258,5 @@ class GAGANModel(BaseModel):
         eval_fake = self.netD(eval_data)
 
         # Quality fitness score
-        Fq = eval_fake.data.mean().cpu().numpy()
+        Fq = eval_fake.data.mean().item()
         return Fq
