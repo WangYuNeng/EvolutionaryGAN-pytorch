@@ -140,7 +140,7 @@ def define_G(opt, gpu_ids):
         )
     elif opt.netG == 'fc':
         from models.networks.fc import FCGenerator
-        net = FCGenerator(exact_orthogonal=opt.exact_orthogonal)
+        net = FCGenerator(exact_orthogonal=opt.exact_orthogonal, dim=opt.z_dim)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % opt.netG)
     return init_net(net, opt.init_type, opt.init_gain, gpu_ids)
@@ -161,7 +161,7 @@ def define_D(opt, gpu_ids=()):
         net = DCGANDiscriminator(opt.ndf, opt.input_nc, norm_layer)
     elif opt.netG == 'fc':
         from models.networks.fc import FCDiscriminator
-        net = FCDiscriminator()
+        net = FCDiscriminator(dim=opt.z_dim)
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % net)
     return init_net(net, opt.init_type, opt.init_gain, gpu_ids)
