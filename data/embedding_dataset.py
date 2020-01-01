@@ -31,6 +31,16 @@ class EmbeddingDataset(BaseDataset):
         '0to0.1.glove.vec': 'https://drive.google.com/open?id=1atZnVBUqaN9zOfTpilTbV0QCmS8mbYKF',
         '0.1to0.2.glove.vec': 'https://drive.google.com/open?id=1AmRZy-tE8YJbU-qYEhK7OPzyYvFo6xj4',
 
+        '0to0.1.cbow10.vec': 'https://drive.google.com/open?id=1TrfIf3VzHXv0RKKhdsh6LOdJiDUIK1nd',
+        '0.1to0.2.cbow10.vec': 'https://drive.google.com/open?id=1Pd_bfTHJj2KvG7APvD_UMrwD9KSSdPlz',
+        '0to0.1.word2vec-cbow10.vec': 'https://drive.google.com/open?id=17KXvWSuUhJ46d81ixkVlLDwOBkWNnaaH',
+        '0.1to0.2.word2vec-cbow10.vec': 'https://drive.google.com/open?id=18Ulj6d6TVLTP0RDNiT4u179aVcbGJoAL',
+        '0to0.1.skipgram10.vec': 'https://drive.google.com/open?id=1O1UMRTp8NQj-IUi05OizBSiGXj6BTfTC',
+        '0.1to0.2.skipgram10.vec': 'https://drive.google.com/open?id=1c6ruZxXt7BawY0RStXYa2SHRbmUvAB3O',
+        '0to0.1.word2vec-skipgram10.vec': 'https://drive.google.com/open?id=1AFqIJVpBGHcCDvEDxPW6RRuI4UY9zdzT',
+        '0.1to0.2.word2vec-skipgram10.vec': 'https://drive.google.com/open?id=1cPwEwXISFmO1Uif6h4Q8kFyl8pvblmE9',
+        '0to0.1.glove10.vec': 'https://drive.google.com/open?id=1rPaEAc756yWjd68cq2bRJA4OfJ4uYh5l',
+        '0.1to0.2.glove10.vec': 'https://drive.google.com/open?id=1WmArLQ_3qbOt6N4LT8b0GwZ-IzOWC8ha',
     }
 
     @staticmethod
