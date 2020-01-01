@@ -45,9 +45,9 @@ class EmbeddingDataset(BaseDataset):
 
     @staticmethod
     def modify_commandline_options(parser, is_train):
-        parser.add_argument('--source_dataset_name', type=str, default='cbow',
+        parser.add_argument('--source_dataset_name', type=str, default=None,
                             help='name of imported dataset, options: [cbow, fasttext]')
-        parser.add_argument('--target_dataset_name', type=str, default='cbow',
+        parser.add_argument('--target_dataset_name', type=str, default=None,
                             help='name of imported dataset, options: [cbow, fasttext]')
         parser.add_argument('--exact_orthogonal', action='store_true')
         return parser
@@ -77,6 +77,8 @@ class EmbeddingDataset(BaseDataset):
             self.target_name,
             list(self.download_urls.keys()),
         )
+        assert self.source_name != 'mock'
+
         for url_name in [self.source_url_name, self.target_url_name]:
             self.download_embeddings(url_name)
 
@@ -84,15 +86,33 @@ class EmbeddingDataset(BaseDataset):
             self.source_url_name,
             self.opt.max_dataset_size,
         )
-        self.target_vecs, self.target_word2idx, self.target_idx2word = self.load_embeddings(
-            self.target_url_name,
-            self.opt.max_dataset_size,
-        )
+        if self.target_url_name == 'mock':
+            self.target_idx2word, self.target_word2idx = self.source_idx2word, self.source_word2idx
+            self.target_vecs, _ = self.create_mock_target(self.source_vecs)
+        else:
+            self.target_vecs, self.target_word2idx, self.target_idx2word = self.load_embeddings(
+                self.target_url_name,
+                self.opt.max_dataset_size,
+            )
+
+    @staticmethod
+    def create_mock_target(source_vecs):
+        emb_dim = source_vecs.shape[-1]
+        random_mat = np.random.random([emb_dim, emb_dim]).astype(source_vecs.dtype)
+        triu = np.triu(random_mat)
+        skew = triu - triu.T
+        I = np.identity(emb_dim, dtype=source_vecs.dtype)
+        mapping = (I - skew) @ np.linalg.inv(I + skew)
+        target_vecs = source_vecs @ mapping
+        return target_vecs, mapping
 
     @staticmethod
     def get_url_names(source_name: str, target_name: str, url_names: list):
         matched_url_names = []
         for match_name in [source_name, target_name]:
+            if match_name == 'mock':
+                matched_url_names.append('mock')
+                continue
             for name in url_names:
                 if match_name in name:
                     matched_url_names.append(name)
@@ -101,6 +121,8 @@ class EmbeddingDataset(BaseDataset):
         return matched_url_names
 
     def download_embeddings(self, url_name: str):
+        if url_name == 'mock':
+            return
         if os.path.exists(os.path.join(self.data_root, url_name)):
             return
         subprocess.run(
