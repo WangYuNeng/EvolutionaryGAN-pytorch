@@ -91,10 +91,15 @@ class EGANModel(BaseModel):
             
             # define loss functions
             self.criterionG = None # Will be define by G_mutations
-            self.criterionD = GANLoss(opt.d_loss_mode, 'D', opt.which_D).to(self.device)
+            self.criterionD = None
             # define G mutations 
             self.G_mutations = [
                 GANLoss(g_loss, 'G', opt.which_D).to(self.device)
+                for g_loss in opt.g_loss_mode
+            ]
+            # define D adaptions
+            self.D_adpations = [
+                GANLoss(g_loss, 'D', opt.which_D).to(self.device)
                 for g_loss in opt.g_loss_mode
             ]
             # initialize optimizers
@@ -107,6 +112,9 @@ class EGANModel(BaseModel):
         self.G_candis = [copy.deepcopy(self.netG.state_dict())] * opt.candi_num
         self.optG_candis = [copy.deepcopy(self.optimizer_G.state_dict())] * opt.candi_num
         self.loss_mode_to_idx = {loss_mode:i for i, loss_mode in enumerate(opt.g_loss_mode)}
+        self.wgan_idx = -1
+        if "wgan" in self.loss_mode_to_idx:
+            self.wgan_idx = self.loss_mode_to_idx["wgan"]
 
 
     def forward(self) -> dict:
@@ -157,8 +165,9 @@ class EGANModel(BaseModel):
         real_out = self.netD(self.inputs)
         fake_out = self.netD(gen_data)
 
+        self.criterionD = self.D_adpations[self.loss_G["mode"]]
         self.loss_D_fake, self.loss_D_real = self.criterionD(fake_out, real_out)
-        if self.opt.use_gp is True:
+        if self.loss_G["mode"] == self.wgan_idx and self.opt.use_gp is True:
             self.loss_D_gp = cal_gradient_penalty(
                 self.netD,
                 self.inputs['data'],
